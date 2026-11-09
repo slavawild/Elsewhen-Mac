@@ -24,6 +24,8 @@
     "mac.cancel": "Cancel"
   },
   "uk": {
+    "elsewhen.world": "Світовий",
+    "elsewhen.clock": "годинник",
     "mac.about": "Про Elsewhen",
     "mac.refresh": "Оновити",
     "mac.settings": "Налаштування…",

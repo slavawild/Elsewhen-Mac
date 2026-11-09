@@ -2,7 +2,7 @@
 "elsewhen.addCity" = "+  Додати місто";
 "elsewhen.badgeHome" = "домашнє";
 "elsewhen.badgeTracked" = "відстежуване";
-"elsewhen.clock" = "Годинник";
+"elsewhen.clock" = "годинник";
 "elsewhen.dateFormat" = "ddd d MMM";
 "elsewhen.daysShort" = "%1 дн.";
 "elsewhen.editPeople" = "Хто тут";
@@ -23,7 +23,7 @@
 "elsewhen.timezoneFailed" = "Не вдалося перевести годинник на %1";
 "elsewhen.tomorrow" = "Завтра";
 "elsewhen.whereAreYou" = "Де ви?";
-"elsewhen.world" = "Світ";
+"elsewhen.world" = "Світовий";
 "elsewhen.worldClock" = "Світовий годинник";
 "elsewhen.yesterday" = "Вчора";
 "mac.about" = "Про Elsewhen";

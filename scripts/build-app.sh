@@ -24,7 +24,16 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/Elsewhen" "$app/Contents/MacOS/Elsewhen"
 # SwiftPM's resource bundles: the data files, and the strings.
 for bundle in "$bin"/*.bundle; do cp -R "$bundle" "$app/Contents/Resources/"; done
-cp Support/AppIcon.icns "$app/Contents/Resources/" 2>/dev/null || true
+
+# The icon, from the 1024-point master that scripts/make-icon.py draws.
+iconset="$root/build/AppIcon.iconset"
+mkdir -p "$iconset"
+for size in 16 32 128 256 512; do
+  sips -z $size $size Support/AppIcon.png --out "$iconset/icon_${size}x${size}.png" >/dev/null
+  sips -z $((size * 2)) $((size * 2)) Support/AppIcon.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$iconset" -o "$app/Contents/Resources/AppIcon.icns"
+rm -rf "$iconset"
 
 # Every language the strings come in, so macOS lets the app speak it.
 localizations=""

@@ -67,6 +67,7 @@ open build/Elsewhen.app
 
 - `Sources/ElsewhenCore`: everything that is arithmetic or text, with no AppKit, so it is unit-tested on its own. Ported from `Model.js`, `Sun.js`, `GlobeModel.js`, `Arc.js` and `Greetings.js`.
 - `Sources/Elsewhen`: the app. `PanelModel` is `Panel.qml`'s state and behaviour; the views mirror the QML components; `AppDelegate` is the menu bar item and popover.
+- `scripts/make-icon.py` draws `Support/AppIcon.png`, the app icon: the app's own globe (same projection and coastlines) with a day side, a night side and a gold terminator, on a night-blue tile. `build-app.sh` turns it into `AppIcon.icns`.
 - `scripts/sync-omarchy.mjs` regenerates `world.json`, `cities.json`, `greetings.json` and every `.lproj` from an Omarchy checkout. The macOS-only strings live in `scripts/mac-strings.json`.
 
 ```bash
