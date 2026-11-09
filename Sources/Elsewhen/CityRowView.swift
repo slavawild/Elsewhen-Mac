@@ -8,9 +8,10 @@ import SwiftUI
 /// for the whole list.
 struct CityRowView: View {
   @ObservedObject var model: PanelModel
+  /// The second-by-second time: a tick redraws the rows, not the panel around them.
+  @ObservedObject var clock: Clock
   var index: Int
   var city: City
-  var row: ClockRow
   var theme: Theme
   var timeColumnWidth: CGFloat
   /// Every row's height, for a drag across rows that are not all one height.
@@ -36,7 +37,7 @@ struct CityRowView: View {
   var removable: Bool { model.zones.count > 1 }
 
   /// Lightest at midday, darkest at night, so the list dims into the small hours.
-  var fill: Double {
+  func fill(_ row: ClockRow) -> Double {
     let phase: Double
     switch row.ready ? row.phase : .day {
     case .day: phase = 0.10
@@ -46,15 +47,16 @@ struct CityRowView: View {
     return picked ? 0.15 : hovered ? phase + 0.05 : phase
   }
 
-  var ground: RGB { theme.background.mix(theme.foreground, fill) }
+  func ground(_ row: ClockRow) -> RGB { theme.background.mix(theme.foreground, fill(row)) }
 
   var body: some View {
     let zoom = model.zoom
+    let row = model.clockRow(city)
     VStack(alignment: .leading, spacing: Self.stripGap) {
       HStack(alignment: .center, spacing: 16) {
-        labels
+        labels(row)
         Spacer(minLength: 0)
-        timeBlock
+        timeBlock(row)
       }
       .contentShape(Rectangle())
       .gesture(reorder)
@@ -67,7 +69,7 @@ struct CityRowView: View {
     .padding(.horizontal, Style.rowPaddingX)
     .padding(.top, Self.pad - 2)
     .padding(.bottom, Self.pad)
-    .background(RoundedRectangle(cornerRadius: Style.cornerRadius).fill(ground.color))
+    .background(RoundedRectangle(cornerRadius: Style.cornerRadius).fill(ground(row).color))
     .overlay(alignment: .topTrailing) { cornerButtons }
     .onHover { hovered = $0 }
     .scaleEffect(Model.knockShrink(index, zoom))
@@ -82,7 +84,7 @@ struct CityRowView: View {
 
   // MARK: parts
 
-  private var labels: some View {
+  private func labels(_ row: ClockRow) -> some View {
     VStack(alignment: .leading, spacing: 2) {
       HStack(alignment: .firstTextBaseline, spacing: 7) {
         Text(city.label)
@@ -108,7 +110,7 @@ struct CityRowView: View {
         }
       }
 
-      if !city.people.isEmpty && !editingPeople { people }
+      if !city.people.isEmpty && !editingPeople { people(ground(row)) }
 
       if editingPeople {
         TextField(L10n.t("elsewhen.peoplePlaceholder", "Names or @github handles, comma separated"), text: $peopleText)
@@ -160,7 +162,7 @@ struct CityRowView: View {
     }
   }
 
-  private var people: some View {
+  private func people(_ ground: RGB) -> some View {
     let size = (Style.caption * 1.45).rounded()
     return HStack(spacing: 6) {
       // Overlapping, the way a group photo stands.
@@ -177,7 +179,7 @@ struct CityRowView: View {
     }
   }
 
-  private var timeBlock: some View {
+  private func timeBlock(_ row: ClockRow) -> some View {
     VStack(alignment: .trailing, spacing: 1) {
       // The hour is already the brightest thing on the row, so hover lifts the meridiem.
       HoverRow(action: { model.toggleHour24() }) { hot in

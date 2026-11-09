@@ -56,7 +56,7 @@ struct SunOrMoon: View {
 
 /// A small drawn globe for where an icon would go. Drawn, not glyphed, so it
 /// can spin: `spin` is the longitude facing the viewer; the view leans it.
-struct MiniGlobe: View {
+struct MiniGlobe: View, Equatable {
   var spin: Double
   var theme: Theme
   var showMarker: Bool

@@ -52,24 +52,14 @@ struct HeroView: View {
     let zoom = model.zoom
     let focus = model.focusPlace
     VStack(spacing: 2) {
-      // Away from home it brings the globe back; at home it asks where here is.
-      let clickable = model.focusIndex >= 0 || (!model.localZone.isEmpty && !model.globeMode)
-      ArcText(text: model.hereLine, rise: 6, size: Style.caption,
-              color: (model.scrubMinutes != 0 ? theme.accent : theme.dim).color)
-        .contentShape(Rectangle())
-        .onTapGesture {
-          guard clickable else { return }
-          if model.focusIndex >= 0 { model.focusOn(-1) }
-          else if model.hereSearch.active { model.stopSearch(.here) }
-          else { model.startChoosingHere() }
-        }
-        .onHover { inside in if inside && clickable { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() } }
+      HereCaption(model: model, clock: model.clock, theme: theme)
 
       HStack(spacing: 9) {
         titleWord(L10n.t("elsewhen.world", "World"))
         ZStack {
           MiniGlobe(spin: model.heroSpin, theme: theme, showMarker: focus != nil,
                     markerLat: focus?.lat ?? 0, markerLon: focus?.lon ?? 0)
+            .equatable()
             .opacity(1 - model.bigGlobeOpacity)
           // The globe leans with the earth; the cross stays upright.
           Text("\u{00d7}")
@@ -97,6 +87,28 @@ struct HeroView: View {
 
   private func titleWord(_ text: String) -> some View {
     Text(text).font(Style.font(Style.title, .semibold)).foregroundColor(theme.foreground.color)
+  }
+}
+
+/// "It's 10:28 AM here in Kyiv" on its arc: the one part of the hero that ticks.
+struct HereCaption: View {
+  @ObservedObject var model: PanelModel
+  @ObservedObject var clock: Clock
+  var theme: Theme
+
+  var body: some View {
+    // Away from home it brings the globe back; at home it asks where here is.
+    let clickable = model.focusIndex >= 0 || (!model.localZone.isEmpty && !model.globeMode)
+    ArcText(text: model.hereLine, rise: 6, size: Style.caption,
+            color: (model.scrubMinutes != 0 ? theme.accent : theme.dim).color)
+      .contentShape(Rectangle())
+      .onTapGesture {
+        guard clickable else { return }
+        if model.focusIndex >= 0 { model.focusOn(-1) }
+        else if model.hereSearch.active { model.stopSearch(.here) }
+        else { model.startChoosingHere() }
+      }
+      .onHover { inside in if inside && clickable { NSCursor.pointingHand.set() } else { NSCursor.arrow.set() } }
   }
 }
 
@@ -171,13 +183,12 @@ struct PanelView: View {
   /// Clipped, so knocked rows fall out of the panel; with room above and to
   /// the right for the round buttons that straddle each row's corner.
   private func list(_ theme: Theme, width: CGFloat, stageHeight: CGFloat?) -> some View {
-    let rows = model.clockRows()
     let knockFall = Double(listHeight) + 220
     let timeColumn = timeColumnWidth
     return VStack(spacing: Style.panelGap) {
       VStack(spacing: Style.rowGap) {
         ForEach(Array(model.zones.enumerated()), id: \.offset) { i, city in
-          CityRowView(model: model, index: i, city: city, row: rows[i], theme: theme,
+          CityRowView(model: model, clock: model.clock, index: i, city: city, theme: theme,
                       timeColumnWidth: timeColumn, rowHeights: rowHeights, knockFall: knockFall)
             .background(GeometryReader { Color.clear.preference(key: RowHeightsKey.self, value: [i: $0.size.height]) })
             .id(city.key)

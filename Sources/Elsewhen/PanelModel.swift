@@ -50,7 +50,9 @@ final class PanelModel: ObservableObject {
 
   // MARK: the clock
 
-  @Published var nowMs: Double = Date().timeIntervalSince1970 * 1000
+  /// The ticking time, observed only by the views that show it.
+  let clock = Clock()
+  var nowMs: Double { clock.nowMs }
   @Published private(set) var localZone: String = TimeZone.current.identifier
   /// Set absolutely from the pointer, held briefly after release, then back to now.
   @Published var scrubMinutes: Double = 0
@@ -192,7 +194,10 @@ final class PanelModel: ObservableObject {
   }
 
   func tick() {
-    nowMs = Date().timeIntervalSince1970 * 1000
+    let now = Date().timeIntervalSince1970 * 1000
+    clock.nowMs = now
+    let minute = (now / 60000).rounded(.down) * 60000
+    if globe.sunMs != minute { globe.sunMs = minute }
   }
 
   private func timeZoneChanged() {
@@ -302,9 +307,10 @@ final class PanelModel: ObservableObject {
     save()
   }
 
-  func clockRows() -> [ClockRow] {
-    let ms = effectiveMs, tz = localTimeZone, h24 = hour24, w = words
-    return zones.map { Model.rowFor($0, info: ZoneInfo.of($0.id, atMs: ms), ms: ms, localZone: tz, hour24: h24, words: w) }
+  /// A row's clock at the shown time (now, or scrubbed).
+  func clockRow(_ city: City) -> ClockRow {
+    let ms = effectiveMs
+    return Model.rowFor(city, info: ZoneInfo.of(city.id, atMs: ms), ms: ms, localZone: localTimeZone, hour24: hour24, words: words)
   }
 
   func offsetText(_ row: ClockRow) -> String {

@@ -1,4 +1,5 @@
 import AppKit
+import CoreVideo
 import ElsewhenCore
 import QuartzCore
 import SwiftUI
@@ -158,10 +159,86 @@ enum Style {
 
 // MARK: - Motion
 
+/// The display's own frame clock. A Timer at a guessed rate either wastes
+/// work on a 60 Hz screen or falls behind a 120 Hz one; a display link ticks
+/// once per refresh, and only while something is moving.
+final class FrameClock {
+  static let shared = FrameClock()
+
+  private var link: CVDisplayLink?
+  private var fallback: Timer?
+  private var subscribers: [Int: (CFTimeInterval) -> Void] = [:]
+  private var nextID = 0
+  private let lock = NSLock()
+  private var pending = false
+
+  /// Calls `frame` on the main thread with the frame's time, once per refresh, until unsubscribed.
+  func subscribe(_ frame: @escaping (CFTimeInterval) -> Void) -> Int {
+    nextID += 1
+    subscribers[nextID] = frame
+    start()
+    return nextID
+  }
+
+  func unsubscribe(_ id: Int) {
+    subscribers[id] = nil
+    if subscribers.isEmpty { stop() }
+  }
+
+  private func start() {
+    guard link == nil && fallback == nil else { return }
+    var created: CVDisplayLink?
+    if CVDisplayLinkCreateWithActiveCGDisplays(&created) == kCVReturnSuccess, let created {
+      CVDisplayLinkSetOutputHandler(created) { [weak self] _, _, _, _, _ in
+        self?.schedule()
+        return kCVReturnSuccess
+      }
+      if CVDisplayLinkStart(created) == kCVReturnSuccess {
+        link = created
+        return
+      }
+    }
+    // No display (a headless run): a plain 60 Hz timer.
+    let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in self?.fire() }
+    RunLoop.main.add(timer, forMode: .common)
+    fallback = timer
+  }
+
+  private func stop() {
+    if let link { CVDisplayLinkStop(link) }
+    link = nil
+    fallback?.invalidate()
+    fallback = nil
+  }
+
+  /// Called on the display link's thread: one hop to the main thread per frame, never a queue of them.
+  private func schedule() {
+    lock.lock()
+    if pending {
+      lock.unlock()
+      return
+    }
+    pending = true
+    lock.unlock()
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.lock.lock()
+      self.pending = false
+      self.lock.unlock()
+      self.fire()
+    }
+  }
+
+  private func fire() {
+    let now = CACurrentMediaTime()
+    for frame in Array(subscribers.values) { frame(now) }
+  }
+}
+
 /// A frame-driven tween. SwiftUI's own animations interpolate views, not the
 /// one number - `zoom`, a spin - that a whole transition is a function of.
 final class Tween {
-  private var timer: Timer?
+  private var subscription: Int?
   private var start: CFTimeInterval = 0
   private var duration: Double = 0
   private var from: Double = 0
@@ -170,7 +247,7 @@ final class Tween {
   private var onFrame: (Double) -> Void = { _ in }
   private var onDone: () -> Void = {}
 
-  var running: Bool { timer != nil }
+  var running: Bool { subscription != nil }
 
   func run(from: Double, to: Double, duration: Double, easing: Easing,
            onFrame: @escaping (Double) -> Void, onDone: @escaping () -> Void = {}) {
@@ -182,27 +259,29 @@ final class Tween {
     self.onFrame = onFrame
     self.onDone = onDone
     start = CACurrentMediaTime()
-    let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] _ in
-      self?.step()
-    }
-    RunLoop.main.add(timer, forMode: .common)
-    self.timer = timer
-    step()
+    subscription = FrameClock.shared.subscribe { [weak self] now in self?.step(now) }
+    step(start)
   }
 
   func stop() {
-    timer?.invalidate()
-    timer = nil
+    if let subscription { FrameClock.shared.unsubscribe(subscription) }
+    subscription = nil
   }
 
-  private func step() {
-    let t = min(1, (CACurrentMediaTime() - start) / duration)
+  private func step(_ now: CFTimeInterval) {
+    let t = min(1, (now - start) / duration)
     onFrame(from + (to - from) * easing(t))
     if t >= 1 {
       stop()
       onDone()
     }
   }
+}
+
+/// The time the clocks show, ticking once a second while the panel is open.
+/// Its own object, so a tick redraws the clocks and not the whole panel.
+final class Clock: ObservableObject {
+  @Published var nowMs: Double = Date().timeIntervalSince1970 * 1000
 }
 
 /// A repeating timer on the main run loop, in every mode.

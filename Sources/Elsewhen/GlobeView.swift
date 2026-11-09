@@ -40,7 +40,7 @@ struct GlobeView: View {
           .contentShape(Rectangle())
           .gesture(pointer(width: width, height: canvasHeight, r: r))
 
-        footer
+        GlobeFooter(model: model, globe: globe, clock: model.clock, theme: theme)
           .frame(height: Self.footerHeight)
           .opacity(model.chromeOpacity)
           .padding(.bottom, 4)
@@ -65,51 +65,33 @@ struct GlobeView: View {
 
   private func canvas(scene: GlobeScene, r: Double, reduced: Bool) -> some View {
     let fg = theme.foreground
-    let sub = Solar.subsolarPoint(model.nowMs)
-    let spin = globe.spin, viewLat = globe.viewLat
+    let sub = Solar.subsolarPoint(globe.sunMs)
     let cities = globe.allCities
     let selected = globe.selected
-    let coarse = reduced && model.zoom < 0.5
     let night = theme.background.color(0.92)
+    // Coarse coastlines only while moving and small; the zoom's slow tail is near full size.
+    let key = GlobeGeometry.Key(spin: globe.spin, viewLat: globe.viewLat, radius: r,
+                                coarse: reduced && model.zoom < 0.5, gridStep: reduced ? 60 : 30, sunMs: globe.sunMs)
+    let paths = globe.geometry.paths(key)
 
     return Canvas { ctx, size in
-      let c = CGPoint(x: size.width / 2, y: size.height / 2)
+      // Everything below is drawn about the disc's centre.
+      ctx.translateBy(x: size.width / 2, y: size.height / 2)
+      let o = CGPoint.zero
 
       // Ocean, mixed opaque against the background so the rows behind never show through.
-      ctx.fill(.disc(c, r), with: .color(theme.background.mix(fg, 0.05).color))
-      ctx.stroke(.disc(c, r), with: .color(fg.color(0.22)), lineWidth: 1)
-
-      // Graticule every 30 degrees, or 60 while moving.
-      let step = reduced ? 60.0 : 30.0
-      var grid = Path()
-      for lon in stride(from: -180.0, to: 180, by: step) {
-        let pts = stride(from: -90.0, through: 90, by: 3).map { LatLon(lat: $0, lon: lon) }
-        grid.addRuns(Solar.visibleSegments(pts, spin: spin, viewLat: viewLat, r: r), center: c)
-      }
-      for lat in stride(from: -60.0, through: 60, by: step) {
-        let pts = stride(from: -180.0, through: 180, by: 3).map { LatLon(lat: lat, lon: $0) }
-        grid.addRuns(Solar.visibleSegments(pts, spin: spin, viewLat: viewLat, r: r), center: c)
-      }
-      ctx.stroke(grid, with: .color(fg.color(0.10)), lineWidth: 1)
-
+      ctx.fill(.disc(o, r), with: .color(theme.background.mix(fg, 0.05).color))
+      ctx.stroke(.disc(o, r), with: .color(fg.color(0.22)), lineWidth: 1)
+      ctx.stroke(paths.grid, with: .color(fg.color(0.10)), lineWidth: 1)
       // Land, filled bright with no coastline stroke: the fill's own edge is the coast.
-      var land = Path()
-      for ring in coarse ? GlobeData.landCoarse : GlobeData.land {
-        let poly = Solar.clipRingToDisc(ring, spin: spin, viewLat: viewLat, r: r)
-        if poly.count >= 3 { land.addPath(Path(poly, center: c, close: true)) }
-      }
-      ctx.fill(land, with: .color(theme.background.mix(fg, 0.92).color))
-
-      // Day/night line.
-      var term = Path()
-      term.addRuns(Solar.visibleSegments(Solar.terminator(sub, steps: 180), spin: spin, viewLat: viewLat, r: r), center: c)
-      ctx.stroke(term, with: .color(theme.daylight.color(0.55)), lineWidth: 1)
+      ctx.fill(paths.land, with: .color(theme.background.mix(fg, 0.92).color))
+      ctx.stroke(paths.terminator, with: .color(theme.daylight.color(0.55)), lineWidth: 1)
 
       // Cities: gold in daylight, dark at night, each edged in the opposite tone.
       for p in scene.plotted {
         let i = p.index
         guard i < cities.count else { continue }
-        let at = CGPoint(x: c.x + p.x, y: c.y + p.y)
+        let at = CGPoint(x: p.x, y: p.y)
         let day = Solar.isDaylight(cities[i].lat, cities[i].lon, sub)
         let isSelected = i == selected
         let dot = Path.disc(at, isSelected ? 3.6 : 2.2)
@@ -134,13 +116,13 @@ struct GlobeView: View {
           let text = Text(cities[label.index].name)
             .font(Style.font(Style.caption, strong ? .bold : .regular))
             .foregroundColor(ink.color)
-          layer.draw(text, at: CGPoint(x: c.x + label.box.x, y: c.y + label.box.y + label.box.h / 2), anchor: .leading)
+          layer.draw(text, at: CGPoint(x: label.box.x, y: label.box.y + label.box.h / 2), anchor: .leading)
         }
       }
       if !scene.labels.isEmpty {
         ctx.drawLayer { layer in names(fg, &layer) }
         ctx.drawLayer { layer in
-          layer.clip(to: land)
+          layer.clip(to: paths.land)
           names(theme.background, &layer)
         }
       }
@@ -172,16 +154,21 @@ struct GlobeView: View {
         }
       }
   }
+}
 
-  // MARK: the footer
-  // The selected city under the globe: name, local time and badge, then its zone and offset.
+/// The selected city under the globe: name, local time and badge, then its
+/// zone and offset. The one part of the globe that ticks every second.
+struct GlobeFooter: View {
+  @ObservedObject var model: PanelModel
+  @ObservedObject var globe: GlobeState
+  @ObservedObject var clock: Clock
+  var theme: Theme
 
-  @ViewBuilder
-  private var footer: some View {
+  var body: some View {
     if let city = globe.selectedCity {
       let i = globe.selected
-      let daylight = Solar.isDaylight(city.lat, city.lon, Solar.subsolarPoint(model.nowMs))
-      let offset = ZoneInfo.of(city.zone, atMs: model.nowMs)?.offsetMinutes
+      let daylight = Solar.isDaylight(city.lat, city.lon, Solar.subsolarPoint(globe.sunMs))
+      let offset = ZoneInfo.of(city.zone, atMs: clock.nowMs)?.offsetMinutes
       VStack(spacing: 1) {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
           HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -189,7 +176,7 @@ struct GlobeView: View {
               .frame(width: 8, height: 8)
             Text(city.name).font(Style.font(Style.caption, .semibold)).foregroundColor(theme.foreground.color)
           }
-          Text(Model.formatClock(model.nowMs, offsetMinutes: offset, hour24: model.hour24, words: model.words))
+          Text(Model.formatClock(clock.nowMs, offsetMinutes: offset, hour24: model.hour24, words: model.words))
             .font(Style.font(Style.caption)).foregroundColor(theme.dim.color)
           let badge = globe.isHome(i) ? L10n.t("elsewhen.badgeHome", "home")
             : globe.isTracked(i) ? L10n.t("elsewhen.badgeTracked", "tracked") : ""

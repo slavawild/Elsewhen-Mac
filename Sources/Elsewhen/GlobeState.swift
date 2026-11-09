@@ -1,5 +1,7 @@
 import AppKit
 import ElsewhenCore
+import QuartzCore
+import SwiftUI
 
 /// The big globe's own state: where it faces, what is selected, and the
 /// cities it draws. Kept apart from the panel so dragging the globe repaints
@@ -14,6 +16,10 @@ final class GlobeState: ObservableObject {
   @Published private(set) var flying = false
   @Published private(set) var coasting = false
   @Published private(set) var allCities: [GlobeCity] = GlobeData.cities
+  /// The instant the terminator and the dots' daylight are drawn for, moved
+  /// on a minute at a time: the line creeps a quarter of a degree a minute.
+  @Published var sunMs: Double = (Date().timeIntervalSince1970 * 1000 / 60000).rounded(.down) * 60000
+  let geometry = GlobeGeometry()
 
   private(set) var homeName = ""
   private(set) var trackedNames = Set<String>()
@@ -29,7 +35,8 @@ final class GlobeState: ObservableObject {
   let throwDecay = 0.96
 
   private let flight = Tween()
-  private let coast = Ticker()
+  private var coast: Int?
+  private var lastFrame: CFTimeInterval = 0
 
   /// A city not on the globe yet was picked; the panel geocodes it for the session.
   var onJump: (String, String, Place?) -> Void = { _, _, _ in }
@@ -159,7 +166,9 @@ final class GlobeState: ObservableObject {
     velocity = -dx * dragSpinRate
   }
 
-  /// The throw: spin keeps going after the drag and eases to a stop.
+  /// The throw: spin keeps going after the drag and eases to a stop. The
+  /// velocity is degrees per 60th of a second, so each frame is scaled by
+  /// how long it really took: the same throw on a 60 or a 120 Hz screen.
   func endDrag(moved: Bool) {
     dragging = false
     if !moved {
@@ -168,16 +177,20 @@ final class GlobeState: ObservableObject {
     }
     if abs(velocity) <= 0.01 { return }
     coasting = true
-    coast.start(every: 1.0 / 60) { [weak self] in
+    lastFrame = CACurrentMediaTime()
+    coast = FrameClock.shared.subscribe { [weak self] now in
       guard let self else { return }
-      self.spin += self.velocity
-      self.velocity *= self.throwDecay
+      let ticks = max(0, min(4, (now - self.lastFrame) * 60))
+      self.lastFrame = now
+      self.spin += self.velocity * ticks
+      self.velocity *= pow(self.throwDecay, ticks)
       if abs(self.velocity) <= 0.01 { self.stopCoasting() }
     }
   }
 
   func stopCoasting() {
-    coast.stop()
+    if let coast { FrameClock.shared.unsubscribe(coast) }
+    coast = nil
     velocity = 0
     if coasting { coasting = false }
   }
@@ -255,5 +268,52 @@ struct GlobeScene {
       }
     }
     return best
+  }
+}
+
+/// The globe's paths for one view of it - coastlines, graticule and
+/// terminator, centred on the origin - kept until the view changes. While the
+/// globe grows out of the header it is redrawn every frame at one spin and
+/// one radius (the zoom is a scale on top), so this is built once, not 60 times a second.
+final class GlobeGeometry {
+  struct Key: Equatable {
+    var spin: Double
+    var viewLat: Double
+    var radius: Double
+    var coarse: Bool
+    var gridStep: Double
+    var sunMs: Double
+  }
+
+  struct Paths {
+    var land = Path()
+    var grid = Path()
+    var terminator = Path()
+  }
+
+  private var key: Key?
+  private var cached = Paths()
+
+  func paths(_ key: Key) -> Paths {
+    if key == self.key { return cached }
+    let r = key.radius, spin = key.spin, viewLat = key.viewLat, origin = CGPoint.zero
+    var paths = Paths()
+    for lon in stride(from: -180.0, to: 180, by: key.gridStep) {
+      let pts = stride(from: -90.0, through: 90, by: 3).map { LatLon(lat: $0, lon: lon) }
+      paths.grid.addRuns(Solar.visibleSegments(pts, spin: spin, viewLat: viewLat, r: r), center: origin)
+    }
+    for lat in stride(from: -60.0, through: 60, by: key.gridStep) {
+      let pts = stride(from: -180.0, through: 180, by: 3).map { LatLon(lat: lat, lon: $0) }
+      paths.grid.addRuns(Solar.visibleSegments(pts, spin: spin, viewLat: viewLat, r: r), center: origin)
+    }
+    for ring in key.coarse ? GlobeData.landCoarse : GlobeData.land {
+      let poly = Solar.clipRingToDisc(ring, spin: spin, viewLat: viewLat, r: r)
+      if poly.count >= 3 { paths.land.addPath(Path(poly, center: origin, close: true)) }
+    }
+    let line = Solar.terminator(Solar.subsolarPoint(key.sunMs), steps: 180)
+    paths.terminator.addRuns(Solar.visibleSegments(line, spin: spin, viewLat: viewLat, r: r), center: origin)
+    self.key = key
+    cached = paths
+    return paths
   }
 }
