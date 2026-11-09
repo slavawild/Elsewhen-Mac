@@ -133,7 +133,7 @@ struct PanelView: View {
         ScrollViewReader { proxy in
           ScrollView(.vertical, showsIndicators: false) { content(theme) }
             .frame(height: min(max(contentHeight, 120), Style.panelMaxHeight))
-            .onChange(of: model.scrollRequest) { request in
+            .onChange(of: model.scrollRequest) { _, request in
               guard let request else { return }
               withAnimation(.easeOut(duration: 0.16)) {
                 proxy.scrollTo(request.id, anchor: request.id == "top" ? .top : .bottom)

@@ -71,7 +71,7 @@ struct DaylightStrip: View {
       }
     }
     .frame(height: Self.height)
-    .onChange(of: hovered) { if !$0 { shownChip = -1 } }
+    .onChange(of: hovered) { _, inside in if !inside { shownChip = -1 } }
   }
 
   // Scrub, or Shift-click the moon to run its phase show.

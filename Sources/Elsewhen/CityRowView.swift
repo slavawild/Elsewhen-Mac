@@ -126,7 +126,7 @@ struct CityRowView: View {
             Task { @MainActor in peopleFocused = true }
           }
           // Leaving the field keeps what was typed, the way Return does.
-          .onChange(of: peopleFocused) { focused in
+          .onChange(of: peopleFocused) { _, focused in
             if !focused && model.peopleEditIndex == index { model.finishPeopleEdit(index, peopleText) }
           }
       }
