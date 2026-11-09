@@ -1,6 +1,6 @@
 import AppKit
-import Combine
 import ElsewhenCore
+import Observation
 import SwiftUI
 
 /// The menu bar item and the panel it opens: Omarchy's bar button and
@@ -14,7 +14,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
   private var settingsWindow: NSWindow?
   private let menuBarTicker = Ticker()
   private var menuBarShown: String?
-  private var observers: Set<AnyCancellable> = []
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     if let dir = ProcessInfo.processInfo.environment["ELSEWHEN_SNAPSHOT_DIR"] {
@@ -47,16 +46,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     host.sizingOptions = [.preferredContentSize]
     popover.contentViewController = host
 
-    // The menu bar clock follows the list and the settings as they change, and the minute as it turns.
-    model.objectWillChange
-      .receive(on: RunLoop.main)
-      .sink { [weak self] _ in MainActor.assumeIsolated { self?.updateMenuBarClock() } }
-      .store(in: &observers)
-    updateMenuBarClock()
+    // The menu bar clock follows what it shows - the city, its name, the notation,
+    // the minute - and nothing else the model does.
+    observeMenuBarClock()
     scheduleMenuBarTick()
   }
 
   // MARK: the menu bar clock
+
+  /// Updates the menu bar clock now, and again whenever anything it read changes.
+  private func observeMenuBarClock() {
+    withObservationTracking {
+      updateMenuBarClock()
+    } onChange: { [weak self] in
+      Task { @MainActor in self?.observeMenuBarClock() }
+    }
+  }
 
   /// "Tokyo 19:40" beside the icon, or the icon alone. Only a change touches the menu bar.
   private func updateMenuBarClock() {
@@ -81,8 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     let now = Date().timeIntervalSince1970
     menuBarTicker.once(after: 60 - now.truncatingRemainder(dividingBy: 60) + 0.05) { [weak self] in
       guard let self else { return }
+      // The clock changing is what redraws the menu bar.
       self.model.tick()
-      self.updateMenuBarClock()
       self.scheduleMenuBarTick()
     }
   }

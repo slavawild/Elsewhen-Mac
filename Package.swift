@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
   name: "Elsewhen",
   defaultLocalization: "en",
-  platforms: [.macOS(.v13)],
+  platforms: [.macOS(.v14)],
   products: [
     .executable(name: "Elsewhen", targets: ["Elsewhen"])
   ],

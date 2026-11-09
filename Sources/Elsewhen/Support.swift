@@ -1,6 +1,6 @@
 import AppKit
-import CoreVideo
 import ElsewhenCore
+import Observation
 import QuartzCore
 import SwiftUI
 
@@ -161,18 +161,15 @@ enum Style {
 
 /// The display's own frame clock. A Timer at a guessed rate either wastes
 /// work on a 60 Hz screen or falls behind a 120 Hz one; a display link ticks
-/// once per refresh, and only while something is moving.
+/// once per refresh of the screen the panel is on, and only while something moves.
 @MainActor
-final class FrameClock {
+final class FrameClock: NSObject {
   static let shared = FrameClock()
 
-  private var link: CVDisplayLink?
+  private var link: CADisplayLink?
   private var fallback: Timer?
   private var subscribers: [Int: @MainActor (CFTimeInterval) -> Void] = [:]
   private var nextID = 0
-  /// One hop to the main thread per frame, never a queue of them: set on the
-  /// display link's thread, cleared on the main one.
-  private let pending = Flag()
 
   /// Calls `frame` with the frame's time, once per refresh, until unsubscribed.
   func subscribe(_ frame: @escaping @MainActor (CFTimeInterval) -> Void) -> Int {
@@ -189,27 +186,14 @@ final class FrameClock {
 
   private func start() {
     guard link == nil && fallback == nil else { return }
-    var created: CVDisplayLink?
-    if CVDisplayLinkCreateWithActiveCGDisplays(&created) == kCVReturnSuccess, let created {
-      let pending = self.pending
-      // Runs on the display link's own thread, so it is explicitly not main-actor code.
-      CVDisplayLinkSetOutputHandler(created) { @Sendable _, _, _, _, _ in
-        if pending.raise() {
-          DispatchQueue.main.async {
-            MainActor.assumeIsolated {
-              pending.lower()
-              FrameClock.shared.fire()
-            }
-          }
-        }
-        return kCVReturnSuccess
-      }
-      if CVDisplayLinkStart(created) == kCVReturnSuccess {
-        link = created
-        return
-      }
+    // The screen with the key window (the panel, while it is open), else the main one.
+    if let screen = NSApp?.keyWindow?.screen ?? NSScreen.main ?? NSScreen.screens.first {
+      let link = screen.displayLink(target: self, selector: #selector(frame(_:)))
+      link.add(to: .main, forMode: .common)
+      self.link = link
+      return
     }
-    // No display (a headless run): a plain 60 Hz timer.
+    // No screen at all (a headless run): a plain 60 Hz timer.
     let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { @Sendable _ in
       MainActor.assumeIsolated { FrameClock.shared.fire() }
     }
@@ -218,36 +202,17 @@ final class FrameClock {
   }
 
   private func stop() {
-    if let link { CVDisplayLinkStop(link) }
+    link?.invalidate()
     link = nil
     fallback?.invalidate()
     fallback = nil
   }
 
+  @objc private func frame(_ link: CADisplayLink) { fire() }
+
   private func fire() {
     let now = CACurrentMediaTime()
     for frame in Array(subscribers.values) { frame(now) }
-  }
-}
-
-/// A flag two threads can test and set.
-final class Flag: @unchecked Sendable {
-  private let lock = NSLock()
-  private var up = false
-
-  /// Raises the flag; false when it was already up.
-  func raise() -> Bool {
-    lock.lock()
-    defer { lock.unlock() }
-    if up { return false }
-    up = true
-    return true
-  }
-
-  func lower() {
-    lock.lock()
-    up = false
-    lock.unlock()
   }
 }
 
@@ -298,8 +263,9 @@ final class Tween {
 /// The time the clocks show, ticking once a second while the panel is open.
 /// Its own object, so a tick redraws the clocks and not the whole panel.
 @MainActor
-final class Clock: ObservableObject {
-  @Published var nowMs: Double = Date().timeIntervalSince1970 * 1000
+@Observable
+final class Clock {
+  var nowMs: Double = Date().timeIntervalSince1970 * 1000
 }
 
 /// A repeating or one-shot timer on the main run loop, in every mode.

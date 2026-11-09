@@ -7,7 +7,7 @@ import SwiftUI
 /// geocoder knows. Arrows move the selection, Return picks it, Escape backs
 /// out (the panel's key handler drives those while the field has the keyboard).
 struct CitySearchView: View {
-  @ObservedObject var model: PanelModel
+  var model: PanelModel
   var kind: SearchKind
   var theme: Theme
   var showButton = true
@@ -56,7 +56,7 @@ struct CitySearchView: View {
 
 /// The matches for a search; hosts that overlay results place this themselves.
 struct CityMatchesView: View {
-  @ObservedObject var model: PanelModel
+  var model: PanelModel
   var kind: SearchKind
   var theme: Theme
 

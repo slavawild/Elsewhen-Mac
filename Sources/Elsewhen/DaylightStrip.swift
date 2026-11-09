@@ -6,7 +6,7 @@ import SwiftUI
 /// now (the sun by day, tonight's moon by night), and sunrise and sunset arrows
 /// while the row is hovered. Dragging along it scrubs every clock.
 struct DaylightStrip: View {
-  @ObservedObject var model: PanelModel
+  var model: PanelModel
   var row: ClockRow
   var city: City
   var hovered: Bool

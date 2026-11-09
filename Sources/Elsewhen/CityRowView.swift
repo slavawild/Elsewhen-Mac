@@ -7,9 +7,9 @@ import SwiftUI
 /// click it to turn the globe there. Every toggle on the row flips the setting
 /// for the whole list.
 struct CityRowView: View {
-  @ObservedObject var model: PanelModel
+  var model: PanelModel
   /// The second-by-second time: a tick redraws the rows, not the panel around them.
-  @ObservedObject var clock: Clock
+  var clock: Clock
   var index: Int
   var city: City
   var theme: Theme

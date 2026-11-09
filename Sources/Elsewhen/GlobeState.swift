@@ -1,5 +1,6 @@
 import AppKit
 import ElsewhenCore
+import Observation
 import QuartzCore
 import SwiftUI
 
@@ -7,28 +8,29 @@ import SwiftUI
 /// cities it draws. Kept apart from the panel so dragging the globe repaints
 /// the globe and nothing else.
 @MainActor
-final class GlobeState: ObservableObject {
-  @Published var spin: Double = 20
+@Observable
+final class GlobeState {
+  var spin: Double = 20
   /// Latitude under the viewer. Not "tilt": the hero globe uses that for the axial lean.
-  @Published var viewLat: Double = 20
+  var viewLat: Double = 20
   /// A "label|zone" key, not an index: the city list is rebuilt as its inputs land.
-  @Published var selectedKey = ""
-  @Published var dragging = false
-  @Published private(set) var flying = false
-  @Published private(set) var coasting = false
-  @Published private(set) var allCities: [GlobeCity] = GlobeData.cities
+  var selectedKey = ""
+  var dragging = false
+  private(set) var flying = false
+  private(set) var coasting = false
+  private(set) var allCities: [GlobeCity] = GlobeData.cities
   /// The instant the terminator and the dots' daylight are drawn for, moved
   /// on a minute at a time: the line creeps a quarter of a degree a minute.
-  @Published var sunMs: Double = (Date().timeIntervalSince1970 * 1000 / 60000).rounded(.down) * 60000
+  var sunMs: Double = (Date().timeIntervalSince1970 * 1000 / 60000).rounded(.down) * 60000
   let geometry = GlobeGeometry()
 
   private(set) var homeName = ""
   private(set) var trackedNames = Set<String>()
-  private var homeRow: GlobeCity?
-  private var pendingJump = ""
-  private var homePending = false
+  @ObservationIgnored private var homeRow: GlobeCity?
+  @ObservationIgnored private var pendingJump = ""
+  @ObservationIgnored private var homePending = false
 
-  var velocity: Double = 0
+  @ObservationIgnored var velocity: Double = 0
   let dragSpinRate = 0.45
   let dragTiltRate = 0.35
   let dragLatLimit = 80.0
@@ -36,15 +38,15 @@ final class GlobeState: ObservableObject {
   let throwDecay = 0.96
 
   private let flight = Tween()
-  private var coast: Int?
-  private var lastFrame: CFTimeInterval = 0
+  @ObservationIgnored private var coast: Int?
+  @ObservationIgnored private var lastFrame: CFTimeInterval = 0
 
   /// A city not on the globe yet was picked; the panel geocodes it for the session.
-  var onJump: @MainActor (String, String, Place?) -> Void = { _, _, _ in }
+  @ObservationIgnored var onJump: @MainActor (String, String, Place?) -> Void = { _, _, _ in }
   /// A real selection, for the list's focus.
-  var onSelect: @MainActor (String, String) -> Void = { _, _ in }
+  @ObservationIgnored var onSelect: @MainActor (String, String) -> Void = { _, _ in }
   /// A tap on a city, which may make it here.
-  var onTap: @MainActor (String, String) -> Void = { _, _ in }
+  @ObservationIgnored var onTap: @MainActor (String, String) -> Void = { _, _ in }
 
   var moving: Bool { dragging || flying || coasting }
 
@@ -294,8 +296,8 @@ final class GlobeGeometry {
     var terminator = Path()
   }
 
-  private var key: Key?
-  private var cached = Paths()
+  @ObservationIgnored private var key: Key?
+  @ObservationIgnored private var cached = Paths()
 
   func paths(_ key: Key) -> Paths {
     if key == self.key { return cached }

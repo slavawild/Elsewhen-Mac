@@ -42,7 +42,7 @@ extension View {
 /// "World [globe] Clock" under an arched caption. The little globe is the door
 /// into globe mode and, once the big globe has left it, the cross back out.
 struct HeroView: View {
-  @ObservedObject var model: PanelModel
+  var model: PanelModel
   var theme: Theme
   @State private var iconHovered = false
 
@@ -92,8 +92,8 @@ struct HeroView: View {
 
 /// "It's 10:28 AM here in Kyiv" on its arc: the one part of the hero that ticks.
 struct HereCaption: View {
-  @ObservedObject var model: PanelModel
-  @ObservedObject var clock: Clock
+  var model: PanelModel
+  var clock: Clock
   var theme: Theme
 
   var body: some View {
@@ -115,7 +115,7 @@ struct HereCaption: View {
 /// The panel: the hero, then a stage shared by the list and the globe that
 /// grows out of the little one.
 struct PanelView: View {
-  @ObservedObject var model: PanelModel
+  var model: PanelModel
   /// The snapshot renderer has no scroll view to draw.
   var scrollable = true
   @Environment(\.colorScheme) private var scheme
