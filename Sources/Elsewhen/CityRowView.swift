@@ -136,6 +136,7 @@ struct CityRowView: View {
       ZStack(alignment: .leading) {
         HStack(spacing: 6) {
           caption(row.ready ? row.date : "\u{2026}", row.ready && !row.dayLabel.isEmpty ? theme.dim : theme.fainter)
+            .lineLimit(1)
           if row.ready && !row.dayLabel.isEmpty {
             caption("\u{00b7}", theme.fainter)
             caption(row.dayLabel, theme.dim)
@@ -143,8 +144,13 @@ struct CityRowView: View {
         }
         .opacity(greet ? 0 : 1)
         HStack(spacing: 5) {
+          // One line: the pronunciation gives way first, then the greeting itself.
           caption(greeting.text, theme.foreground)
-          if !greeting.roman.isEmpty { caption(greeting.roman, theme.fainter) }
+            .lineLimit(1)
+            .layoutPriority(1)
+          if !greeting.roman.isEmpty {
+            caption(greeting.roman, theme.fainter).lineLimit(1)
+          }
         }
         .opacity(greet ? 1 : 0)
       }
