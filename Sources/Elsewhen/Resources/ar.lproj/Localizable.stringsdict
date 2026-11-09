@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>elsewhen.daysAhead</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>few</key>
+			<string>+%d أيام</string>
+			<key>many</key>
+			<string>+%d يومًا</string>
+			<key>one</key>
+			<string>+يوم واحد</string>
+			<key>other</key>
+			<string>+%d يوم</string>
+			<key>two</key>
+			<string>+يومان</string>
+			<key>zero</key>
+			<string>+%d يوم</string>
+		</dict>
+	</dict>
+	<key>elsewhen.daysBehind</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>few</key>
+			<string>-%d أيام</string>
+			<key>many</key>
+			<string>-%d يومًا</string>
+			<key>one</key>
+			<string>-يوم واحد</string>
+			<key>other</key>
+			<string>-%d يوم</string>
+			<key>two</key>
+			<string>-يومان</string>
+			<key>zero</key>
+			<string>-%d يوم</string>
+		</dict>
+	</dict>
+</dict>
+</plist>
