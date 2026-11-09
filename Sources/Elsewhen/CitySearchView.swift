@@ -34,7 +34,7 @@ struct CitySearchView: View {
           .background(RoundedRectangle(cornerRadius: 7).fill(theme.background.mix(theme.foreground, 0.08).color))
           .overlay(RoundedRectangle(cornerRadius: 7).stroke(theme.accent.color(0.8), lineWidth: 1))
           .focused($focused)
-          .onAppear { DispatchQueue.main.async { focused = true } }
+          .onAppear { Task { @MainActor in focused = true } }
         if inlineResults { CityMatchesView(model: model, kind: kind, theme: theme) }
       } else if showButton {
         Button { model.startSearch(kind) } label: {

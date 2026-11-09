@@ -6,6 +6,7 @@ import SwiftUI
 /// The big globe's own state: where it faces, what is selected, and the
 /// cities it draws. Kept apart from the panel so dragging the globe repaints
 /// the globe and nothing else.
+@MainActor
 final class GlobeState: ObservableObject {
   @Published var spin: Double = 20
   /// Latitude under the viewer. Not "tilt": the hero globe uses that for the axial lean.
@@ -39,11 +40,11 @@ final class GlobeState: ObservableObject {
   private var lastFrame: CFTimeInterval = 0
 
   /// A city not on the globe yet was picked; the panel geocodes it for the session.
-  var onJump: (String, String, Place?) -> Void = { _, _, _ in }
+  var onJump: @MainActor (String, String, Place?) -> Void = { _, _, _ in }
   /// A real selection, for the list's focus.
-  var onSelect: (String, String) -> Void = { _, _ in }
+  var onSelect: @MainActor (String, String) -> Void = { _, _ in }
   /// A tap on a city, which may make it here.
-  var onTap: (String, String) -> Void = { _, _ in }
+  var onTap: @MainActor (String, String) -> Void = { _, _ in }
 
   var moving: Bool { dragging || flying || coasting }
 
@@ -221,9 +222,10 @@ struct GlobeScene {
   var plotted: [Solar.Plot] = []
   var labels: [Solar.PlacedLabel] = []
 
-  static let labelFont = Style.nsFont(Style.caption)
-  static let strongFont = Style.nsFont(Style.caption, .bold)
+  nonisolated(unsafe) static let labelFont = Style.nsFont(Style.caption)
+  nonisolated(unsafe) static let strongFont = Style.nsFont(Style.caption, .bold)
 
+  @MainActor
   static func make(_ globe: GlobeState, radius: Double, width: Double, reduced: Bool) -> GlobeScene {
     var scene = GlobeScene()
     let cities = globe.allCities
@@ -275,6 +277,7 @@ struct GlobeScene {
 /// terminator, centred on the origin - kept until the view changes. While the
 /// globe grows out of the header it is redrawn every frame at one spin and
 /// one radius (the zoom is a scale on top), so this is built once, not 60 times a second.
+@MainActor
 final class GlobeGeometry {
   struct Key: Equatable {
     var spin: Double

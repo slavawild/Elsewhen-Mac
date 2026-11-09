@@ -162,18 +162,20 @@ enum Style {
 /// The display's own frame clock. A Timer at a guessed rate either wastes
 /// work on a 60 Hz screen or falls behind a 120 Hz one; a display link ticks
 /// once per refresh, and only while something is moving.
+@MainActor
 final class FrameClock {
   static let shared = FrameClock()
 
   private var link: CVDisplayLink?
   private var fallback: Timer?
-  private var subscribers: [Int: (CFTimeInterval) -> Void] = [:]
+  private var subscribers: [Int: @MainActor (CFTimeInterval) -> Void] = [:]
   private var nextID = 0
-  private let lock = NSLock()
-  private var pending = false
+  /// One hop to the main thread per frame, never a queue of them: set on the
+  /// display link's thread, cleared on the main one.
+  private let pending = Flag()
 
-  /// Calls `frame` on the main thread with the frame's time, once per refresh, until unsubscribed.
-  func subscribe(_ frame: @escaping (CFTimeInterval) -> Void) -> Int {
+  /// Calls `frame` with the frame's time, once per refresh, until unsubscribed.
+  func subscribe(_ frame: @escaping @MainActor (CFTimeInterval) -> Void) -> Int {
     nextID += 1
     subscribers[nextID] = frame
     start()
@@ -189,8 +191,17 @@ final class FrameClock {
     guard link == nil && fallback == nil else { return }
     var created: CVDisplayLink?
     if CVDisplayLinkCreateWithActiveCGDisplays(&created) == kCVReturnSuccess, let created {
-      CVDisplayLinkSetOutputHandler(created) { [weak self] _, _, _, _, _ in
-        self?.schedule()
+      let pending = self.pending
+      // Runs on the display link's own thread, so it is explicitly not main-actor code.
+      CVDisplayLinkSetOutputHandler(created) { @Sendable _, _, _, _, _ in
+        if pending.raise() {
+          DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+              pending.lower()
+              FrameClock.shared.fire()
+            }
+          }
+        }
         return kCVReturnSuccess
       }
       if CVDisplayLinkStart(created) == kCVReturnSuccess {
@@ -199,7 +210,9 @@ final class FrameClock {
       }
     }
     // No display (a headless run): a plain 60 Hz timer.
-    let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in self?.fire() }
+    let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { @Sendable _ in
+      MainActor.assumeIsolated { FrameClock.shared.fire() }
+    }
     RunLoop.main.add(timer, forMode: .common)
     fallback = timer
   }
@@ -211,32 +224,36 @@ final class FrameClock {
     fallback = nil
   }
 
-  /// Called on the display link's thread: one hop to the main thread per frame, never a queue of them.
-  private func schedule() {
-    lock.lock()
-    if pending {
-      lock.unlock()
-      return
-    }
-    pending = true
-    lock.unlock()
-    DispatchQueue.main.async { [weak self] in
-      guard let self else { return }
-      self.lock.lock()
-      self.pending = false
-      self.lock.unlock()
-      self.fire()
-    }
-  }
-
   private func fire() {
     let now = CACurrentMediaTime()
     for frame in Array(subscribers.values) { frame(now) }
   }
 }
 
+/// A flag two threads can test and set.
+final class Flag: @unchecked Sendable {
+  private let lock = NSLock()
+  private var up = false
+
+  /// Raises the flag; false when it was already up.
+  func raise() -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    if up { return false }
+    up = true
+    return true
+  }
+
+  func lower() {
+    lock.lock()
+    up = false
+    lock.unlock()
+  }
+}
+
 /// A frame-driven tween. SwiftUI's own animations interpolate views, not the
 /// one number - `zoom`, a spin - that a whole transition is a function of.
+@MainActor
 final class Tween {
   private var subscription: Int?
   private var start: CFTimeInterval = 0
@@ -244,13 +261,13 @@ final class Tween {
   private var from: Double = 0
   private var to: Double = 0
   private var easing: Easing = .linear
-  private var onFrame: (Double) -> Void = { _ in }
-  private var onDone: () -> Void = {}
+  private var onFrame: @MainActor (Double) -> Void = { _ in }
+  private var onDone: @MainActor () -> Void = {}
 
   var running: Bool { subscription != nil }
 
   func run(from: Double, to: Double, duration: Double, easing: Easing,
-           onFrame: @escaping (Double) -> Void, onDone: @escaping () -> Void = {}) {
+           onFrame: @escaping @MainActor (Double) -> Void, onDone: @escaping @MainActor () -> Void = {}) {
     stop()
     self.from = from
     self.to = to
@@ -280,29 +297,24 @@ final class Tween {
 
 /// The time the clocks show, ticking once a second while the panel is open.
 /// Its own object, so a tick redraws the clocks and not the whole panel.
+@MainActor
 final class Clock: ObservableObject {
   @Published var nowMs: Double = Date().timeIntervalSince1970 * 1000
 }
 
-/// A repeating timer on the main run loop, in every mode.
+/// A repeating or one-shot timer on the main run loop, in every mode.
+@MainActor
 final class Ticker {
   private var timer: Timer?
+  private var action: @MainActor () -> Void = {}
+  private var repeats = false
 
-  func start(every interval: TimeInterval, _ action: @escaping () -> Void) {
-    stop()
-    let timer = Timer(timeInterval: interval, repeats: true) { _ in action() }
-    RunLoop.main.add(timer, forMode: .common)
-    self.timer = timer
+  func start(every interval: TimeInterval, _ action: @escaping @MainActor () -> Void) {
+    schedule(interval, repeats: true, action)
   }
 
-  func once(after interval: TimeInterval, _ action: @escaping () -> Void) {
-    stop()
-    let timer = Timer(timeInterval: interval, repeats: false) { [weak self] _ in
-      self?.timer = nil
-      action()
-    }
-    RunLoop.main.add(timer, forMode: .common)
-    self.timer = timer
+  func once(after interval: TimeInterval, _ action: @escaping @MainActor () -> Void) {
+    schedule(interval, repeats: false, action)
   }
 
   func stop() {
@@ -311,4 +323,20 @@ final class Ticker {
   }
 
   var running: Bool { timer != nil }
+
+  private func schedule(_ interval: TimeInterval, repeats: Bool, _ action: @escaping @MainActor () -> Void) {
+    stop()
+    self.action = action
+    self.repeats = repeats
+    let timer = Timer(timeInterval: interval, repeats: repeats) { @Sendable [weak self] _ in
+      MainActor.assumeIsolated { self?.fire() }
+    }
+    RunLoop.main.add(timer, forMode: .common)
+    self.timer = timer
+  }
+
+  private func fire() {
+    if !repeats { timer = nil }
+    action()
+  }
 }

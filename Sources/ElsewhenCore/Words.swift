@@ -3,7 +3,8 @@ import Foundation
 /// The words the clocks, dates and offsets read in. The app passes words built
 /// from its localized strings and the user's locale; without them, as in the
 /// tests, everything reads in English.
-public struct Words {
+/// Its closures may hold formatters; a Words value is built and read on one thread at a time.
+public struct Words: @unchecked Sendable {
   /// A catalog string by key, with its English text as the fallback.
   public var t: (_ key: String, _ english: String) -> String
   /// A counted catalog string: key, count, English singular and plural.

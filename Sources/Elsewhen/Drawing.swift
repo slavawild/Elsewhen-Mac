@@ -127,7 +127,7 @@ struct ArcText: View {
   var size: CGFloat = Style.caption
   var color: Color
 
-  private static let complex = try! NSRegularExpression(
+  nonisolated(unsafe) private static let complex = try! NSRegularExpression(
     pattern: "[\\u0300-\\u036F\\u0590-\\u08FF\\u0900-\\u0DFF\\u0E00-\\u0EFF\\u1000-\\u109F\\u1780-\\u17FF\\uFB1D-\\uFDFF\\uFE70-\\uFEFF]")
 
   var flat: Bool {
@@ -190,8 +190,9 @@ struct Avatar: View {
     .frame(width: size, height: size)
   }
 
-  private static var cache: [String: NSImage] = [:]
+  @MainActor private static var cache: [String: NSImage] = [:]
 
+  @MainActor
   static func image(_ path: String, _ stamp: Double) -> NSImage? {
     if path.isEmpty { return nil }
     let key = path + "@\(stamp)"

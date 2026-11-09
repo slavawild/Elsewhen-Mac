@@ -21,7 +21,9 @@
     "mac.moveClockTitle": "Move this Mac's clock to %1?",
     "mac.moveClockBody": "%1 keeps %2 time. macOS sets the time zone in System Settings → General → Date & Time. Once this Mac is on %2, Elsewhen counts %1 as here.",
     "mac.openDateTime": "Open Date & Time Settings",
-    "mac.cancel": "Cancel"
+    "mac.cancel": "Cancel",
+    "mac.menuBar": "Menu bar",
+    "mac.menuBarIcon": "Icon only"
   },
   "uk": {
     "elsewhen.world": "Світовий",
@@ -47,6 +49,8 @@
     "mac.moveClockTitle": "Перевести годинник цього Mac на %1?",
     "mac.moveClockBody": "%1 живе за часом %2. Часовий пояс macOS змінюється в Системних параметрах → Загальні → Дата і час. Щойно Mac буде на %2, Elsewhen вважатиме %1 місцем, де ви є.",
     "mac.openDateTime": "Відкрити «Дата і час»",
-    "mac.cancel": "Скасувати"
+    "mac.cancel": "Скасувати",
+    "mac.menuBar": "Рядок меню",
+    "mac.menuBarIcon": "Лише іконка"
   }
 }

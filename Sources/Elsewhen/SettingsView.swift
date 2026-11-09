@@ -32,6 +32,12 @@ struct SettingsView: View {
         Text("°C").tag("C")
         Text("°F").tag("F")
       }
+      Picker(L10n.t("mac.menuBar", "Menu bar"), selection: $model.menuBarCity) {
+        Text(L10n.t("mac.menuBarIcon", "Icon only")).tag("")
+        ForEach(model.zones, id: \.key) { city in
+          Text(city.label).tag(city.key)
+        }
+      }
       Toggle(L10n.t("mac.globeEnabled", "Globe mode (click the hero globe)"), isOn: $model.globeEnabled)
       Toggle(L10n.t("mac.smoothMotion", "Drop labels and detail while the globe moves"), isOn: $model.smoothMotion)
       Toggle(L10n.t("mac.launchAtLogin", "Open at login"), isOn: launchAtLogin)

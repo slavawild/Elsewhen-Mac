@@ -3,7 +3,7 @@ import ElsewhenCore
 import SwiftUI
 
 struct HeroFrameKey: PreferenceKey {
-  static var defaultValue: CGRect = .zero
+  static let defaultValue: CGRect = .zero
   static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
     let next = nextValue()
     if next != .zero { value = next }
@@ -11,7 +11,7 @@ struct HeroFrameKey: PreferenceKey {
 }
 
 struct StageFrameKey: PreferenceKey {
-  static var defaultValue: CGRect = .zero
+  static let defaultValue: CGRect = .zero
   static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
     let next = nextValue()
     if next != .zero { value = next }
@@ -19,17 +19,17 @@ struct StageFrameKey: PreferenceKey {
 }
 
 struct HeightKey: PreferenceKey {
-  static var defaultValue: CGFloat = 0
+  static let defaultValue: CGFloat = 0
   static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 struct ListHeightKey: PreferenceKey {
-  static var defaultValue: CGFloat = 0
+  static let defaultValue: CGFloat = 0
   static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 struct RowHeightsKey: PreferenceKey {
-  static var defaultValue: [Int: CGFloat] = [:]
+  static let defaultValue: [Int: CGFloat] = [:]
   static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) { value.merge(nextValue()) { $1 } }
 }
 

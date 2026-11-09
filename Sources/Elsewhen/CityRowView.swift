@@ -123,7 +123,7 @@ struct CityRowView: View {
           .onSubmit { model.finishPeopleEdit(index, peopleText) }
           .onAppear {
             peopleText = Model.peopleText(city.people)
-            DispatchQueue.main.async { peopleFocused = true }
+            Task { @MainActor in peopleFocused = true }
           }
           // Leaving the field keeps what was typed, the way Return does.
           .onChange(of: peopleFocused) { focused in

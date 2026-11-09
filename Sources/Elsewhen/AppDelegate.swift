@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import ElsewhenCore
 import SwiftUI
 
@@ -10,6 +11,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
   private var popover: NSPopover!
   private var keyMonitor: Any?
   private var settingsWindow: NSWindow?
+  private let menuBarTicker = Ticker()
+  private var menuBarShown: String?
+  private var observers: Set<AnyCancellable> = []
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     if let dir = ProcessInfo.processInfo.environment["ELSEWHEN_SNAPSHOT_DIR"] {
@@ -41,6 +45,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     let host = NSHostingController(rootView: PanelView(model: model))
     host.sizingOptions = [.preferredContentSize]
     popover.contentViewController = host
+
+    // The menu bar clock follows the list and the settings as they change, and the minute as it turns.
+    model.objectWillChange
+      .receive(on: RunLoop.main)
+      .sink { [weak self] _ in MainActor.assumeIsolated { self?.updateMenuBarClock() } }
+      .store(in: &observers)
+    updateMenuBarClock()
+    scheduleMenuBarTick()
+  }
+
+  // MARK: the menu bar clock
+
+  /// "Tokyo 19:40" beside the icon, or the icon alone. Only a change touches the menu bar.
+  private func updateMenuBarClock() {
+    guard let button = statusItem?.button else { return }
+    let text = model.menuBarText()
+    if text == menuBarShown { return }
+    menuBarShown = text
+    if let text {
+      button.title = " " + text
+      button.font = .monospacedDigitSystemFont(ofSize: 0, weight: .regular)
+      button.imagePosition = .imageLeading
+      statusItem.length = NSStatusItem.variableLength
+    } else {
+      button.title = ""
+      button.imagePosition = .imageOnly
+      statusItem.length = NSStatusItem.squareLength
+    }
+  }
+
+  /// Wakes just after each minute turns, not every second.
+  private func scheduleMenuBarTick() {
+    let now = Date().timeIntervalSince1970
+    menuBarTicker.once(after: 60 - now.truncatingRemainder(dividingBy: 60) + 0.05) { [weak self] in
+      guard let self else { return }
+      self.model.tick()
+      self.updateMenuBarClock()
+      self.scheduleMenuBarTick()
+    }
   }
 
   // MARK: the panel

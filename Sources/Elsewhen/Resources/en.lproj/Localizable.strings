@@ -35,6 +35,8 @@
 "mac.keys" = "Space: globe · ↑↓: pick a city · ←→: move the clocks an hour · +: add or jump · W: where you are · P: who's here · T: 12/24h · ⌥T: °C/°F · ⌫: remove · R: refresh · Esc: back";
 "mac.keysTitle" = "Keys";
 "mac.launchAtLogin" = "Open at login";
+"mac.menuBar" = "Menu bar";
+"mac.menuBarIcon" = "Icon only";
 "mac.moveClockBody" = "%1 keeps %2 time. macOS sets the time zone in System Settings → General → Date & Time. Once this Mac is on %2, Elsewhen counts %1 as here.";
 "mac.moveClockTitle" = "Move this Mac's clock to %1?";
 "mac.offsetHome" = "Distance from here (+2h)";

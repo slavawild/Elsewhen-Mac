@@ -63,8 +63,24 @@ struct GlobeView: View {
 
   // MARK: the drawing
 
+  /// One city's dot, decided before drawing so the renderer reads plain values.
+  struct Dot {
+    var at: CGPoint
+    var day: Bool
+    var selected: Bool
+    var home: Bool
+    var tracked: Bool
+  }
+
+  struct Name {
+    var text: String
+    var at: CGPoint
+    var strong: Bool
+  }
+
   private func canvas(scene: GlobeScene, r: Double, reduced: Bool) -> some View {
     let fg = theme.foreground
+    let theme = self.theme
     let sub = Solar.subsolarPoint(globe.sunMs)
     let cities = globe.allCities
     let selected = globe.selected
@@ -73,6 +89,16 @@ struct GlobeView: View {
     let key = GlobeGeometry.Key(spin: globe.spin, viewLat: globe.viewLat, radius: r,
                                 coarse: reduced && model.zoom < 0.5, gridStep: reduced ? 60 : 30, sunMs: globe.sunMs)
     let paths = globe.geometry.paths(key)
+    let dots: [Dot] = scene.plotted.compactMap { p in
+      guard p.index < cities.count else { return nil }
+      return Dot(at: CGPoint(x: p.x, y: p.y), day: Solar.isDaylight(cities[p.index].lat, cities[p.index].lon, sub),
+                 selected: p.index == selected, home: globe.isHome(p.index), tracked: globe.isTracked(p.index))
+    }
+    let names: [Name] = scene.labels.compactMap { label in
+      guard label.index < cities.count else { return nil }
+      return Name(text: cities[label.index].name, at: CGPoint(x: label.box.x, y: label.box.y + label.box.h / 2),
+                  strong: globe.isHome(label.index) || globe.isTracked(label.index))
+    }
 
     return Canvas { ctx, size in
       // Everything below is drawn about the disc's centre.
@@ -88,42 +114,36 @@ struct GlobeView: View {
       ctx.stroke(paths.terminator, with: .color(theme.daylight.color(0.55)), lineWidth: 1)
 
       // Cities: gold in daylight, dark at night, each edged in the opposite tone.
-      for p in scene.plotted {
-        let i = p.index
-        guard i < cities.count else { continue }
-        let at = CGPoint(x: p.x, y: p.y)
-        let day = Solar.isDaylight(cities[i].lat, cities[i].lon, sub)
-        let isSelected = i == selected
-        let dot = Path.disc(at, isSelected ? 3.6 : 2.2)
-        ctx.fill(dot, with: day ? .color(theme.daylight.color) : .color(night))
-        ctx.stroke(dot, with: .color(day ? theme.background.color(0.7) : fg.color(0.85)), lineWidth: 1.2)
-        if globe.isHome(i) {
-          ctx.fill(.disc(at, 3.4), with: .color(theme.accent.color))
-          ctx.stroke(.disc(at, 3.4), with: .color(theme.background.color(0.5)), lineWidth: 1.2)
-          ctx.stroke(.disc(at, 6.4), with: .color(theme.accent.color(0.65)), lineWidth: 1.4)
-        } else if globe.isTracked(i) {
-          ctx.stroke(.disc(at, 4.6), with: .color(theme.accent.color), lineWidth: 1.3)
+      for d in dots {
+        let dot = Path.disc(d.at, d.selected ? 3.6 : 2.2)
+        ctx.fill(dot, with: d.day ? .color(theme.daylight.color) : .color(night))
+        ctx.stroke(dot, with: .color(d.day ? theme.background.color(0.7) : fg.color(0.85)), lineWidth: 1.2)
+        if d.home {
+          ctx.fill(.disc(d.at, 3.4), with: .color(theme.accent.color))
+          ctx.stroke(.disc(d.at, 3.4), with: .color(theme.background.color(0.5)), lineWidth: 1.2)
+          ctx.stroke(.disc(d.at, 6.4), with: .color(theme.accent.color(0.65)), lineWidth: 1.4)
+        } else if d.tracked {
+          ctx.stroke(.disc(d.at, 4.6), with: .color(theme.accent.color), lineWidth: 1.3)
         }
-        if isSelected {
-          ctx.stroke(.disc(at, 7.5), with: .color(day ? theme.daylight.color : fg.color), lineWidth: 1.4)
+        if d.selected {
+          ctx.stroke(.disc(d.at, 7.5), with: .color(d.day ? theme.daylight.color : fg.color), lineWidth: 1.4)
         }
       }
 
       // City names in two tones: light over the sea, then dark through a clip of the land.
-      func names(_ ink: RGB, _ layer: inout GraphicsContext) {
-        for label in scene.labels where label.index < cities.count {
-          let strong = globe.isHome(label.index) || globe.isTracked(label.index)
-          let text = Text(cities[label.index].name)
-            .font(Style.font(Style.caption, strong ? .bold : .regular))
+      func draw(_ ink: RGB, _ layer: inout GraphicsContext) {
+        for name in names {
+          let text = Text(name.text)
+            .font(Style.font(Style.caption, name.strong ? .bold : .regular))
             .foregroundColor(ink.color)
-          layer.draw(text, at: CGPoint(x: label.box.x, y: label.box.y + label.box.h / 2), anchor: .leading)
+          layer.draw(text, at: name.at, anchor: .leading)
         }
       }
-      if !scene.labels.isEmpty {
-        ctx.drawLayer { layer in names(fg, &layer) }
+      if !names.isEmpty {
+        ctx.drawLayer { layer in draw(fg, &layer) }
         ctx.drawLayer { layer in
           layer.clip(to: paths.land)
-          names(theme.background, &layer)
+          draw(theme.background, &layer)
         }
       }
     }

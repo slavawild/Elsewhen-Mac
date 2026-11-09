@@ -61,18 +61,18 @@ public enum Greetings {
     public var key: String
   }
 
-  struct Band: Decodable {
+  struct Band: Decodable, Sendable {
     var from: Int
     var text: String
     var roman: String
   }
 
-  struct Language: Decodable {
+  struct Language: Decodable, Sendable {
     var name: String
     var bands: [Band]
   }
 
-  struct Table: Decodable {
+  struct Table: Decodable, Sendable {
     var fallback: String
     var languages: [String: Language]
     var countries: [String: String]

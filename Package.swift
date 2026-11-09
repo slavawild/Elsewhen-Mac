@@ -1,4 +1,4 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.0
 import PackageDescription
 
 let package = Package(
@@ -22,6 +22,13 @@ let package = Package(
     .testTarget(
       name: "ElsewhenCoreTests",
       dependencies: ["ElsewhenCore"]
+    ),
+    // The app's own behaviour, and reference images of the panel.
+    .testTarget(
+      name: "ElsewhenTests",
+      dependencies: ["Elsewhen", "ElsewhenCore"],
+      resources: [.copy("__Snapshots__")]
     )
-  ]
+  ],
+  swiftLanguageModes: [.v6]
 )

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import ElsewhenCore
 import ServiceManagement
 import SwiftUI
@@ -21,9 +22,14 @@ struct SearchState: Equatable {
 /// Everything the panel shows and does: the port of Elsewhen's Panel.qml.
 /// One number, `zoom`, drives the list-to-globe transition; the list's focus
 /// is held as a city's key so it follows the city through a reorder.
+@MainActor
 final class PanelModel: ObservableObject {
   private let defaults: UserDefaults
+  /// Saves its settings to `defaults`.
   private let persists: Bool
+  /// Fetches places, weather and profiles. Off for tests and snapshots.
+  private let network: Bool
+  private let locale: Locale
   let globe = GlobeState()
 
   // MARK: settings
@@ -37,6 +43,8 @@ final class PanelModel: ObservableObject {
   @Published var globeEnabled = true { didSet { save() } }
   /// Draw the globe with less in it while it moves.
   @Published var smoothMotion = true { didSet { save() } }
+  /// The city whose time sits beside the menu bar icon, by key; "" for the icon alone.
+  @Published var menuBarCity = "" { didSet { save() } }
   /// Where you are; it counts only while this Mac is on its zone.
   @Published private(set) var hereSetting: City?
   /// A here on another zone, waiting for this Mac's clock to move there.
@@ -46,7 +54,7 @@ final class PanelModel: ObservableObject {
 
   var hour24: Bool { hour24Setting ?? L10n.systemUses24Hour }
   var units: String { Model.resolveUnits(unitsSetting, auto: L10n.systemUnits) }
-  @Published private(set) var words: Words = L10n.words()
+  @Published private(set) var words: Words
 
   // MARK: the clock
 
@@ -126,13 +134,13 @@ final class PanelModel: ObservableObject {
   @Published var peopleEditIndex = -1
 
   /// Set by the app: close the panel, and ask for this Mac's clock to move to a zone.
-  var onClose: () -> Void = {}
-  var onMoveClock: (_ city: String, _ zone: String) -> Void = { _, _ in }
+  var onClose: @MainActor () -> Void = {}
+  var onMoveClock: @MainActor (_ city: String, _ zone: String) -> Void = { _, _ in }
 
   private let ticker = Ticker()
   private let factsTicker = Ticker()
   private let scrubHold = Ticker()
-  private var observers: [NSObjectProtocol] = []
+  private var observers: Set<AnyCancellable> = []
 
   private static let catalog: [String] = TimeZone.knownTimeZoneIdentifiers
   private lazy var allZoneOptions: [ZoneOption] = Model.zoneOptions(Self.catalog, existing: [])
@@ -140,9 +148,14 @@ final class PanelModel: ObservableObject {
 
   // MARK: - life
 
-  init(defaults: UserDefaults = .standard, persists: Bool = true) {
+  init(defaults: UserDefaults = .standard, persists: Bool = true, network: Bool = true,
+       localZone: String? = nil, locale: Locale = .current) {
     self.defaults = defaults
     self.persists = persists
+    self.network = network
+    self.locale = locale
+    self.words = L10n.words(locale: locale)
+    if let localZone { self.localZone = localZone }
     load()
     globe.onJump = { [weak self] label, zone, place in self?.addSessionCity(label, zone, place) }
     globe.onSelect = { [weak self] label, zone in self?.focusFromGlobe(label, zone) }
@@ -151,16 +164,16 @@ final class PanelModel: ObservableObject {
     syncGlobe()
 
     let center = NotificationCenter.default
-    observers.append(center.addObserver(forName: NSNotification.Name.NSSystemTimeZoneDidChange, object: nil, queue: .main) { [weak self] _ in
-      self?.timeZoneChanged()
-    })
-    observers.append(center.addObserver(forName: NSLocale.currentLocaleDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
-      self?.words = L10n.words()
-    })
-    if persists { refreshFacts() }
+    center.publisher(for: .NSSystemTimeZoneDidChange)
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] _ in MainActor.assumeIsolated { self?.timeZoneChanged() } }
+      .store(in: &observers)
+    center.publisher(for: NSLocale.currentLocaleDidChangeNotification)
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] _ in MainActor.assumeIsolated { self?.words = L10n.words() } }
+      .store(in: &observers)
+    refreshFacts()
   }
-
-  deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
 
   func setOpened(_ open: Bool) {
     if open == opened { return }
@@ -218,6 +231,7 @@ final class PanelModel: ObservableObject {
   private enum Key {
     static let cities = "cities", hour24 = "hour24", offsetMode = "offsetMode", units = "units"
     static let globeEnabled = "globeEnabled", smoothMotion = "smoothMotion", here = "here", pendingHere = "pendingHere"
+    static let menuBarCity = "menuBarCity"
   }
 
   private func load() {
@@ -231,6 +245,7 @@ final class PanelModel: ObservableObject {
     unitsSetting = defaults.string(forKey: Key.units) ?? ""
     globeEnabled = defaults.object(forKey: Key.globeEnabled) as? Bool ?? true
     smoothMotion = defaults.object(forKey: Key.smoothMotion) as? Bool ?? true
+    menuBarCity = defaults.string(forKey: Key.menuBarCity) ?? ""
     hereSetting = decodeCity(Key.here)
     pendingHere = decodeCity(Key.pendingHere)
   }
@@ -249,6 +264,7 @@ final class PanelModel: ObservableObject {
     defaults.set(unitsSetting, forKey: Key.units)
     defaults.set(globeEnabled, forKey: Key.globeEnabled)
     defaults.set(smoothMotion, forKey: Key.smoothMotion)
+    defaults.set(menuBarCity, forKey: Key.menuBarCity)
     for (key, city) in [(Key.here, hereSetting), (Key.pendingHere, pendingHere)] {
       if let city { defaults.set(try? encoder.encode(city), forKey: key) } else { defaults.removeObject(forKey: key) }
     }
@@ -342,6 +358,13 @@ final class PanelModel: ObservableObject {
 
   var hereZone: Here? { Model.resolveHere(hereSetting, localZone: localZone) }
   var homeCity: String { hereZone?.city.label ?? "" }
+
+  /// The menu bar's "Tokyo 19:40", at the real time, or nil for the icon alone.
+  func menuBarText() -> String? {
+    guard !menuBarCity.isEmpty, let city = zones.first(where: { $0.key == menuBarCity }),
+          let info = ZoneInfo.of(city.id, atMs: nowMs) else { return nil }
+    return city.label + " " + Model.formatClock(nowMs, offsetMinutes: info.offsetMinutes, hour24: hour24, words: words)
+  }
   var homeZone: City { hereZone?.city ?? City(label: "", id: localZone) }
 
   var localTime: String {
@@ -396,7 +419,7 @@ final class PanelModel: ObservableObject {
       save()
       let name = pendingHere?.label ?? next.zoneChange
       let zone = next.zoneChange
-      DispatchQueue.main.async { [weak self] in self?.onMoveClock(name, zone) }
+      Task { @MainActor [weak self] in self?.onMoveClock(name, zone) }
       return
     }
     pendingHere = nil
@@ -769,9 +792,11 @@ final class PanelModel: ObservableObject {
 
   private func lookupPlaces() {
     let q = placeWanted
-    if q.isEmpty || placeCache[q] != nil || placeRunning { return }
+    if q.isEmpty || placeCache[q] != nil || placeRunning || !network { return }
     placeRunning = true
-    Network.get(Model.geocodeURL(q)) { [weak self] data in
+    let url = Model.geocodeURL(q)
+    Task { [weak self] in
+      let data = await Network.get(url)
       guard let self else { return }
       self.placeRunning = false
       // A failed lookup is remembered as no places, so the list stops saying it is searching.
@@ -795,7 +820,7 @@ final class PanelModel: ObservableObject {
   }
 
   func refreshFacts() {
-    if zones.isEmpty { return }
+    if zones.isEmpty || !network { return }
     if factsRunning {
       factsQueued = true
       return
@@ -812,7 +837,9 @@ final class PanelModel: ObservableObject {
       return true
     }
     factsRunning = true
-    Network.getAll(missing.map { Model.geocodeURL($0.label) }) { [weak self] answers in
+    let urls = missing.map { Model.geocodeURL($0.label) }
+    Task { [weak self] in
+      let answers = await Network.getAll(urls)
       guard let self else { return }
       for (i, row) in missing.enumerated() {
         let found = Model.pickGeocode(answers[i], zone: row.id)
@@ -838,7 +865,9 @@ final class PanelModel: ObservableObject {
       return
     }
     let points = keys.compactMap { coords($0, pinned) }
-    Network.get(Model.forecastURL(points)) { [weak self] data in
+    let url = Model.forecastURL(points)
+    Task { [weak self] in
+      let data = await Network.get(url)
       guard let self else { return }
       if let data {
         self.weather.merge(Model.parseForecast(data, keys: keys, nowMs: now, points: points)) { $1 }
@@ -867,7 +896,7 @@ final class PanelModel: ObservableObject {
     if spinPending { startOpeningSpin() }
     if factsQueued {
       factsQueued = false
-      DispatchQueue.main.async { [weak self] in self?.refreshFacts() }
+      Task { @MainActor [weak self] in self?.refreshFacts() }
     }
   }
 
@@ -893,14 +922,15 @@ final class PanelModel: ObservableObject {
 
   func fetchProfiles() {
     let wanted = Model.handlesIn(zones).filter { !profilesTried.contains($0) }
-    if wanted.isEmpty { return }
+    if wanted.isEmpty || !network { return }
     if profilesRunning {
       profilesQueued = true
       return
     }
     profilesTried.formUnion(wanted)
     profilesRunning = true
-    Profiles.load(wanted) { [weak self] loaded in
+    Task { [weak self] in
+      let loaded = await Profiles.load(wanted)
       guard let self else { return }
       self.profiles.merge(loaded) { $1 }
       self.profileStamp = Date().timeIntervalSince1970

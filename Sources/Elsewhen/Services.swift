@@ -12,34 +12,24 @@ enum Network {
     return URLSession(configuration: config)
   }()
 
-  /// The body of a successful HTTPS GET, delivered on the main queue; nil on any failure.
-  static func get(_ url: URL?, _ done: @escaping (Data?) -> Void) {
-    guard let url, url.scheme == "https" else {
-      DispatchQueue.main.async { done(nil) }
-      return
-    }
-    session.dataTask(with: url) { data, response, error in
-      let ok = error == nil && ((response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false)
-      DispatchQueue.main.async { done(ok ? data : nil) }
-    }.resume()
+  /// The body of a successful HTTPS GET; nil on any failure.
+  static func get(_ url: URL?) async -> Data? {
+    guard let url, url.scheme == "https" else { return nil }
+    guard let answer = try? await session.data(from: url),
+          let http = answer.1 as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
+    return answer.0
   }
 
   /// Several GETs at once, answered together in request order.
-  static func getAll(_ urls: [URL?], _ done: @escaping ([Data?]) -> Void) {
-    if urls.isEmpty {
-      done([])
-      return
-    }
-    var results = [Data?](repeating: nil, count: urls.count)
-    let group = DispatchGroup()
-    for (i, url) in urls.enumerated() {
-      group.enter()
-      get(url) { data in
-        results[i] = data
-        group.leave()
+  static func getAll(_ urls: [URL?]) async -> [Data?] {
+    await withTaskGroup(of: (Int, Data?).self) { group in
+      for (i, url) in urls.enumerated() {
+        group.addTask { (i, await Network.get(url)) }
       }
+      var results = [Data?](repeating: nil, count: urls.count)
+      for await (i, data) in group { results[i] = data }
+      return results
     }
-    group.notify(queue: .main) { done(results) }
   }
 }
 
@@ -64,37 +54,32 @@ enum Profiles {
   }
 
   /// Fetches what is missing or stale, then answers with every profile it has.
-  static func load(_ handles: [String], _ done: @escaping ([String: Profile]) -> Void) {
+  static func load(_ handles: [String]) async -> [String: Profile] {
     let valid = handles.map { $0.lowercased() }.filter { Model.isGitHubHandle($0) }
     let dir = directory
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                              attributes: [.posixPermissions: 0o700])
-    let group = DispatchGroup()
-    for handle in valid {
-      let json = dir.appendingPathComponent(handle + ".json")
-      let image = dir.appendingPathComponent(handle + ".avatar")
-      let stale = age(json).map { $0 > week } ?? true
-      group.enter()
-      if stale {
-        Network.get(URL(string: "https://api.github.com/users/" + handle)) { data in
-          if let data, (try? JSONSerialization.jsonObject(with: data)) != nil {
-            try? data.write(to: json, options: .atomic)
-            fetchAvatar(json, image, force: true) { group.leave() }
-          } else {
-            fetchAvatar(json, image, force: false) { group.leave() }
-          }
-        }
-      } else {
-        fetchAvatar(json, image, force: false) { group.leave() }
-      }
-    }
-    group.notify(queue: .main) {
-      var out: [String: Profile] = [:]
+    await withTaskGroup(of: Void.self) { group in
       for handle in valid {
-        if let profile = read(handle, in: dir) { out[handle] = profile }
+        group.addTask {
+          let json = dir.appendingPathComponent(handle + ".json")
+          let image = dir.appendingPathComponent(handle + ".avatar")
+          var fresh = false
+          if age(json).map({ $0 > week }) ?? true,
+             let data = await Network.get(URL(string: "https://api.github.com/users/" + handle)),
+             (try? JSONSerialization.jsonObject(with: data)) != nil {
+            try? data.write(to: json, options: .atomic)
+            fresh = true
+          }
+          await fetchAvatar(json, image, force: fresh)
+        }
       }
-      done(out)
     }
+    var out: [String: Profile] = [:]
+    for handle in valid {
+      if let profile = read(handle, in: dir) { out[handle] = profile }
+    }
+    return out
   }
 
   static func age(_ url: URL) -> TimeInterval? {
@@ -105,18 +90,13 @@ enum Profiles {
 
   /// The avatar comes from GitHub's own avatar host by numeric id: the API's
   /// answer is not trusted to name a URL.
-  static func fetchAvatar(_ json: URL, _ image: URL, force: Bool, _ done: @escaping () -> Void) {
+  static func fetchAvatar(_ json: URL, _ image: URL, force: Bool) async {
     guard force || age(image) == nil,
           let data = try? Data(contentsOf: json),
           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-          let id = (object["id"] as? NSNumber)?.int64Value else {
-      done()
-      return
-    }
-    Network.get(URL(string: "https://avatars.githubusercontent.com/u/\(id)?s=96")) { data in
-      if let data { try? data.write(to: image, options: .atomic) }
-      done()
-    }
+          let id = (object["id"] as? NSNumber)?.int64Value,
+          let avatar = await Network.get(URL(string: "https://avatars.githubusercontent.com/u/\(id)?s=96")) else { return }
+    try? avatar.write(to: image, options: .atomic)
   }
 
   static func read(_ handle: String, in dir: URL) -> Profile? {
