@@ -147,19 +147,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
   // MARK: the menu
 
+  /// Shown the way a status item's own menu is, so macOS places it under the
+  /// icon and draws it whole; the item's menu is cleared after, so a left
+  /// click still opens the panel.
   private func showMenu(_ button: NSStatusBarButton) {
     let menu = NSMenu()
-    menu.addItem(item(L10n.t("mac.refresh", "Refresh"), #selector(refresh), "r"))
-    menu.addItem(item(L10n.t("mac.settings", "Settings…"), #selector(openSettings), ","))
+    menu.addItem(item(L10n.t("mac.refresh", "Refresh"), "arrow.clockwise", #selector(refresh), "r"))
+    menu.addItem(item(L10n.t("mac.settings", "Settings…"), "gearshape", #selector(openSettings), ","))
     menu.addItem(.separator())
-    menu.addItem(item(L10n.t("mac.about", "About Elsewhen"), #selector(showAbout), ""))
-    menu.addItem(item(L10n.t("mac.quit", "Quit Elsewhen"), #selector(quit), "q"))
-    menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+    menu.addItem(item(L10n.t("mac.about", "About Elsewhen"), "info.circle", #selector(showAbout), ""))
+    menu.addItem(item(L10n.t("mac.quit", "Quit Elsewhen"), "power", #selector(quit), "q"))
+    statusItem.menu = menu
+    button.performClick(nil)
+    statusItem.menu = nil
   }
 
-  private func item(_ title: String, _ action: Selector, _ key: String) -> NSMenuItem {
+  /// Every item has its symbol: macOS gives Settings one of its own, and a
+  /// menu where only some items have icons lines its titles up unevenly.
+  private func item(_ title: String, _ symbol: String, _ action: Selector, _ key: String) -> NSMenuItem {
     let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
     item.target = self
+    item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
     return item
   }
 
