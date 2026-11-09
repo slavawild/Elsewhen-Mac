@@ -1,0 +1,58 @@
+name: Release
+
+# Run from the Actions tab (Release → Run workflow) on main, or push a tag
+# such as v0.1.0. Tests, builds the universal app, and publishes a GitHub
+# release with Elsewhen-<version>.zip and its SHA-256.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.1.0 (blank: the VERSION file)"
+        required: false
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+          else
+            version="${{ github.event.inputs.version }}"
+            version="${version#v}"
+            [[ -n "$version" ]] || version="$(cat VERSION)"
+          fi
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || { echo "not a version: $version"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version"
+
+      - name: Test
+        run: swift test
+
+      - name: Build
+        run: VERSION="${{ steps.version.outputs.version }}" scripts/build-app.sh
+
+      - name: Package
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          mv build/Elsewhen.zip "build/Elsewhen-$v.zip"
+          (cd build && shasum -a 256 "Elsewhen-$v.zip" > "Elsewhen-$v.zip.sha256")
+          cat "build/Elsewhen-$v.zip.sha256"
+          sed "s/__VERSION__/$v/g" .github/release-notes.md > build/notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          gh release create "v$v" "build/Elsewhen-$v.zip" "build/Elsewhen-$v.zip.sha256" \
+            --title "Elsewhen $v" --notes-file build/notes.md --generate-notes --target "$GITHUB_SHA"
