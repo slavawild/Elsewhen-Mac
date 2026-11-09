@@ -38,7 +38,7 @@ Right-click the menu bar icon for Refresh, Settings, About and Quit.
 
 ## Install
 
-Every CI run attaches a universal, ad-hoc signed `Elsewhen.zip` (macOS 14 Sonoma or later). Unzip it and move `Elsewhen.app` to `/Applications`. The app is not notarized, so the first time, right-click it and choose **Open**, or run:
+Download `Elsewhen-<version>.zip` from the [latest release](https://github.com/slavawild/Elsewhen-Mac/releases/latest): a universal, ad-hoc signed build for macOS 14 Sonoma or later. Every CI run also attaches a fresh `Elsewhen.zip`. Unzip it and move `Elsewhen.app` to `/Applications`. The app is not notarized, so the first time, right-click it and choose **Open**, or run:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Elsewhen.app
@@ -76,6 +76,10 @@ After a deliberate visual change, re-record the reference images on the macOS ve
 ```bash
 RECORD_SNAPSHOTS=1 swift test --filter SnapshotTests
 ```
+
+### Releasing
+
+Bump `VERSION`, then run **Release** from the Actions tab on `main` (or push a `v<version>` tag). It tests, builds the universal app and publishes a GitHub release with the zip and its SHA-256, using `.github/release-notes.md` plus the merged pull requests as notes.
 
 ### Layout
 
