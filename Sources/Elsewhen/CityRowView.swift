@@ -25,6 +25,10 @@ struct CityRowView: View {
 
   static let pad: CGFloat = 13
   static let stripGap: CGFloat = 9
+  static let captionLine: CGFloat = {
+    let font = Style.nsFont(Style.caption)
+    return ceil(font.ascender - font.descender + font.leading)
+  }()
 
   var dragged: Bool { model.dragIndex == index }
   var picked: Bool { model.focusIndex == index && !model.addSelected }
@@ -144,6 +148,8 @@ struct CityRowView: View {
         }
         .opacity(greet ? 1 : 0)
       }
+      // One caption line tall whatever the script: Georgian or Thai would otherwise grow the row.
+      .frame(height: Self.captionLine, alignment: .leading)
       .animation(.easeInOut(duration: 0.11), value: greet)
     }
   }
