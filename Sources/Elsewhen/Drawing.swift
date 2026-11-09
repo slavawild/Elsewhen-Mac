@@ -127,7 +127,7 @@ struct ArcText: View {
   var size: CGFloat = Style.caption
   var color: Color
 
-  nonisolated(unsafe) private static let complex = try! NSRegularExpression(
+  private static let complex = try! NSRegularExpression(
     pattern: "[\\u0300-\\u036F\\u0590-\\u08FF\\u0900-\\u0DFF\\u0E00-\\u0EFF\\u1000-\\u109F\\u1780-\\u17FF\\uFB1D-\\uFDFF\\uFE70-\\uFEFF]")
 
   var flat: Bool {

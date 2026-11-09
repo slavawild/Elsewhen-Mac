@@ -5,6 +5,7 @@ import SwiftUI
 
 /// The menu bar item and the panel it opens: Omarchy's bar button and
 /// KeyboardPanel, as an NSStatusItem and a popover.
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
   private var model: PanelModel!
   private var statusItem: NSStatusItem!
