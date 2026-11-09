@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import ElsewhenCore
+import Observation
 import ServiceManagement
 import SwiftUI
 
@@ -23,7 +24,8 @@ struct SearchState: Equatable {
 /// One number, `zoom`, drives the list-to-globe transition; the list's focus
 /// is held as a city's key so it follows the city through a reorder.
 @MainActor
-final class PanelModel: ObservableObject {
+@Observable
+final class PanelModel {
   private let defaults: UserDefaults
   /// Saves its settings to `defaults`.
   private let persists: Bool
@@ -34,117 +36,117 @@ final class PanelModel: ObservableObject {
 
   // MARK: settings
 
-  @Published private(set) var zones: [City] = []
+  private(set) var zones: [City] = []
   /// nil follows the system's clock notation.
-  @Published var hour24Setting: Bool? = nil { didSet { save() } }
-  @Published var offsetMode: OffsetMode = .home { didSet { save() } }
+  var hour24Setting: Bool? = nil { didSet { save() } }
+  var offsetMode: OffsetMode = .home { didSet { save() } }
   /// "", "C" or "F"; blank follows the system's measurement units.
-  @Published var unitsSetting = "" { didSet { save() } }
-  @Published var globeEnabled = true { didSet { save() } }
+  var unitsSetting = "" { didSet { save() } }
+  var globeEnabled = true { didSet { save() } }
   /// Draw the globe with less in it while it moves.
-  @Published var smoothMotion = true { didSet { save() } }
+  var smoothMotion = true { didSet { save() } }
   /// The city whose time sits beside the menu bar icon, by key; "" for the icon alone.
-  @Published var menuBarCity = "" { didSet { save() } }
+  var menuBarCity = "" { didSet { save() } }
   /// Where you are; it counts only while this Mac is on its zone.
-  @Published private(set) var hereSetting: City?
+  private(set) var hereSetting: City?
   /// A here on another zone, waiting for this Mac's clock to move there.
-  @Published private(set) var pendingHere: City?
+  private(set) var pendingHere: City?
 
-  private var loading = false
+  @ObservationIgnored private var loading = false
 
   var hour24: Bool { hour24Setting ?? L10n.systemUses24Hour }
   var units: String { Model.resolveUnits(unitsSetting, auto: L10n.systemUnits) }
-  @Published private(set) var words: Words
+  private(set) var words: Words
 
   // MARK: the clock
 
   /// The ticking time, observed only by the views that show it.
   let clock = Clock()
   var nowMs: Double { clock.nowMs }
-  @Published private(set) var localZone: String = TimeZone.current.identifier
+  private(set) var localZone: String = TimeZone.current.identifier
   /// Set absolutely from the pointer, held briefly after release, then back to now.
-  @Published var scrubMinutes: Double = 0
-  @Published var opened = false
+  var scrubMinutes: Double = 0
+  var opened = false
 
   var effectiveMs: Double { nowMs + scrubMinutes * 60000 }
   var localTimeZone: TimeZone { TimeZone(identifier: localZone) ?? .current }
 
   // MARK: places and weather
 
-  @Published private(set) var facts: [String: Facts] = [:]
+  private(set) var facts: [String: Facts] = [:]
   /// Cities jumped to on the globe; never saved.
-  @Published private(set) var sessionCities: [City] = []
-  private var geo: [String: Place] = [:]
-  private var fallbackGeo: [String: Place] = [:]
-  private var weather: [String: WeatherReading] = [:]
-  private var factsRunning = false
-  private var factsQueued = false
+  private(set) var sessionCities: [City] = []
+  @ObservationIgnored private var geo: [String: Place] = [:]
+  @ObservationIgnored private var fallbackGeo: [String: Place] = [:]
+  @ObservationIgnored private var weather: [String: WeatherReading] = [:]
+  @ObservationIgnored private var factsRunning = false
+  @ObservationIgnored private var factsQueued = false
 
   // MARK: focus and the globe
 
-  @Published var focusKey = ""
+  var focusKey = ""
   /// Past the last city the list's cursor rests on "Add a city".
-  @Published var addSelected = false
-  @Published private(set) var globeMode = false
-  @Published private(set) var zoom: Double = 0
-  @Published private(set) var heroSpinValue: Double = 0
-  @Published private(set) var heroSpinning = false
+  var addSelected = false
+  private(set) var globeMode = false
+  private(set) var zoom: Double = 0
+  private(set) var heroSpinValue: Double = 0
+  private(set) var heroSpinning = false
   /// Asks the scroll view to bring a row, "add" or "top" into view.
-  @Published var scrollRequest: ScrollRequest?
+  var scrollRequest: ScrollRequest?
 
   private let zoomTween = Tween()
   private let heroTween = Tween()
-  private var openingSpin: (from: Double, to: Double) = (-1080, 0)
-  private var spinPending = false
+  @ObservationIgnored private var openingSpin: (from: Double, to: Double) = (-1080, 0)
+  @ObservationIgnored private var spinPending = false
   private let spinFallback = Ticker()
 
   // MARK: dragging rows
 
-  @Published private(set) var dragIndex = -1
-  @Published private(set) var dragOffset: Double = 0
-  @Published private(set) var dragTarget = -1
+  private(set) var dragIndex = -1
+  private(set) var dragOffset: Double = 0
+  private(set) var dragTarget = -1
   private(set) var rowPitch: Double = 0
-  private var rowPitches: [Double] = []
+  @ObservationIgnored private var rowPitches: [Double] = []
   private let dropTween = Tween()
 
   // MARK: the moon
 
-  @Published private(set) var moonShowing = false
-  @Published private(set) var moonDemo: Double = -1
+  private(set) var moonShowing = false
+  private(set) var moonDemo: Double = -1
   private let moonStops: [Double] = [0, 0.12, 0.25, 0.38, 0.5, 0.62, 0.75, 0.88, 1]
-  private var moonStep = 0
+  @ObservationIgnored private var moonStep = 0
   private let moonTimer = Ticker()
   private let moonTween = Tween()
 
   // MARK: search and people
 
-  @Published var addSearch = SearchState()
-  @Published var hereSearch = SearchState()
-  @Published var jumpSearch = SearchState()
-  @Published private(set) var placeCache: [String: [ZoneOption]] = [:]
-  private var placeWanted = ""
-  private var placeRunning = false
+  var addSearch = SearchState()
+  var hereSearch = SearchState()
+  var jumpSearch = SearchState()
+  private(set) var placeCache: [String: [ZoneOption]] = [:]
+  @ObservationIgnored private var placeWanted = ""
+  @ObservationIgnored private var placeRunning = false
   private let placeDebounce = Ticker()
 
-  @Published private(set) var profiles: [String: Profile] = [:]
-  @Published private(set) var profileStamp: Double = 0
-  private var profilesTried = Set<String>()
-  private var profilesRunning = false
-  private var profilesQueued = false
-  @Published var peopleEditIndex = -1
+  private(set) var profiles: [String: Profile] = [:]
+  private(set) var profileStamp: Double = 0
+  @ObservationIgnored private var profilesTried = Set<String>()
+  @ObservationIgnored private var profilesRunning = false
+  @ObservationIgnored private var profilesQueued = false
+  var peopleEditIndex = -1
 
   /// Set by the app: close the panel, and ask for this Mac's clock to move to a zone.
-  var onClose: @MainActor () -> Void = {}
-  var onMoveClock: @MainActor (_ city: String, _ zone: String) -> Void = { _, _ in }
+  @ObservationIgnored var onClose: @MainActor () -> Void = {}
+  @ObservationIgnored var onMoveClock: @MainActor (_ city: String, _ zone: String) -> Void = { _, _ in }
 
   private let ticker = Ticker()
   private let factsTicker = Ticker()
   private let scrubHold = Ticker()
-  private var observers: Set<AnyCancellable> = []
+  @ObservationIgnored private var observers: Set<AnyCancellable> = []
 
   private static let catalog: [String] = TimeZone.knownTimeZoneIdentifiers
-  private lazy var allZoneOptions: [ZoneOption] = Model.zoneOptions(Self.catalog, existing: [])
-  private var zoneOptionsCache: (zones: [City], options: [ZoneOption])?
+  @ObservationIgnored private lazy var allZoneOptions: [ZoneOption] = Model.zoneOptions(Self.catalog, existing: [])
+  @ObservationIgnored private var zoneOptionsCache: (zones: [City], options: [ZoneOption])?
 
   // MARK: - life
 
@@ -274,15 +276,21 @@ final class PanelModel: ObservableObject {
   func toggleOffsetMode() { offsetMode = offsetMode == .utc ? .home : .utc }
   func toggleUnits() { unitsSetting = units == "C" ? "F" : "C" }
 
+  /// Bumped on a change, so a view reading the login item reads it again.
+  private var loginChanges = 0
+
   var launchAtLogin: Bool {
-    get { SMAppService.mainApp.status == .enabled }
+    get {
+      _ = loginChanges
+      return SMAppService.mainApp.status == .enabled
+    }
     set {
       do {
         if newValue { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
       } catch {
         // Outside an app bundle there is nothing to register.
       }
-      objectWillChange.send()
+      loginChanges += 1
     }
   }
 
@@ -472,7 +480,7 @@ final class PanelModel: ObservableObject {
     focusOn(min(at, zones.count - 1))
   }
 
-  private var scrollNonce = 0
+  @ObservationIgnored private var scrollNonce = 0
   func requestScroll(_ id: String) {
     scrollNonce += 1
     scrollRequest = ScrollRequest(id: id, nonce: scrollNonce)

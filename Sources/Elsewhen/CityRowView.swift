@@ -7,9 +7,9 @@ import SwiftUI
 /// click it to turn the globe there. Every toggle on the row flips the setting
 /// for the whole list.
 struct CityRowView: View {
-  @ObservedObject var model: PanelModel
+  var model: PanelModel
   /// The second-by-second time: a tick redraws the rows, not the panel around them.
-  @ObservedObject var clock: Clock
+  var clock: Clock
   var index: Int
   var city: City
   var theme: Theme
@@ -126,7 +126,7 @@ struct CityRowView: View {
             Task { @MainActor in peopleFocused = true }
           }
           // Leaving the field keeps what was typed, the way Return does.
-          .onChange(of: peopleFocused) { focused in
+          .onChange(of: peopleFocused) { _, focused in
             if !focused && model.peopleEditIndex == index { model.finishPeopleEdit(index, peopleText) }
           }
       }

@@ -3,7 +3,7 @@ import SwiftUI
 
 /// What Omarchy keeps on the widget's shell.json entry, as a window.
 struct SettingsView: View {
-  @ObservedObject var model: PanelModel
+  @Bindable var model: PanelModel
 
   private var timeFormat: Binding<Int> {
     Binding(

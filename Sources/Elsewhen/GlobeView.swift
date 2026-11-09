@@ -6,8 +6,8 @@ import SwiftUI
 /// the major city of every zone, the selected city's time underneath, and a
 /// box to jump anywhere.
 struct GlobeView: View {
-  @ObservedObject var model: PanelModel
-  @ObservedObject var globe: GlobeState
+  var model: PanelModel
+  var globe: GlobeState
   var theme: Theme
 
   static let footerHeight: CGFloat = 34
@@ -179,9 +179,9 @@ struct GlobeView: View {
 /// The selected city under the globe: name, local time and badge, then its
 /// zone and offset. The one part of the globe that ticks every second.
 struct GlobeFooter: View {
-  @ObservedObject var model: PanelModel
-  @ObservedObject var globe: GlobeState
-  @ObservedObject var clock: Clock
+  var model: PanelModel
+  var globe: GlobeState
+  var clock: Clock
   var theme: Theme
 
   var body: some View {

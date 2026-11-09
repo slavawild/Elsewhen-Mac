@@ -38,7 +38,7 @@ Right-click the menu bar icon for Refresh, Settings, About and Quit.
 
 ## Install
 
-Every CI run attaches a universal, ad-hoc signed `Elsewhen.zip` (macOS 13 Ventura or later). Unzip it and move `Elsewhen.app` to `/Applications`. The app is not notarized, so the first time, right-click it and choose **Open**, or run:
+Every CI run attaches a universal, ad-hoc signed `Elsewhen.zip` (macOS 14 Sonoma or later). Unzip it and move `Elsewhen.app` to `/Applications`. The app is not notarized, so the first time, right-click it and choose **Open**, or run:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Elsewhen.app
@@ -48,7 +48,7 @@ Turn on **Open at login** in Settings.
 
 ## Build
 
-You need Xcode 16 or later (Swift 6) on macOS. The app itself runs on macOS 13 and later.
+You need Xcode 16 or later (Swift 6) on macOS. The app itself runs on macOS 14 and later.
 
 ```bash
 swift test
