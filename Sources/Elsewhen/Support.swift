@@ -70,8 +70,7 @@ enum L10n {
 
   /// Only the US measurement system means Fahrenheit.
   static var systemUnits: String {
-    if #available(macOS 13, *) { return Locale.current.measurementSystem == .us ? "F" : "C" }
-    return Locale.current.usesMetricSystem ? "C" : "F"
+    Locale.current.measurementSystem == .us ? "F" : "C"
   }
 }
 

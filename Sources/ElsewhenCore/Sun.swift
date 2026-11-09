@@ -23,6 +23,11 @@ public enum Sun {
   public struct Span: Equatable, Sendable {
     public var x0: Double
     public var x1: Double
+
+    public init(x0: Double, x1: Double) {
+      self.x0 = x0
+      self.x1 = x1
+    }
   }
 
   static func wrap180(_ deg: Double) -> Double {

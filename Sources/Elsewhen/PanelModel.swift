@@ -196,7 +196,7 @@ final class PanelModel: ObservableObject {
   }
 
   private func timeZoneChanged() {
-    TimeZone.resetSystemTimeZone()
+    NSTimeZone.resetSystemTimeZone()
     localZone = TimeZone.current.identifier
     if let pending = pendingHere, pending.id == localZone {
       pendingHere = nil
@@ -976,8 +976,9 @@ final class PanelModel: ObservableObject {
     case "r": refreshFacts()
     case "t" where modifiers.contains(.option): toggleUnits()
     case "t": toggleHour24()
-    case "+", "=", "j" where globeMode:
-      if globeMode { startSearch(.jump) } else if characters != "j" { startSearch(.add) }
+    case "+", "=":
+      startSearch(globeMode ? .jump : .add)
+    case "j" where globeMode: startSearch(.jump)
     case "a" where !globeMode: startSearch(.add)
     case "w" where !globeMode: startChoosingHere()
     case "p" where !globeMode && focusIndex >= 0: startPeopleEdit(focusIndex)
