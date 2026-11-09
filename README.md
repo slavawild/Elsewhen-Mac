@@ -15,6 +15,7 @@ It is written in Swift and SwiftUI with no dependencies. The behaviour follows t
 - **People**: add names or `@github` handles to a city to see their faces on its row.
 - **Reorder** rows by dragging them. Add places by name: the search knows every IANA zone plus the towns Open-Meteo's geocoder knows (Portland, Oregon is not Portland, Maine).
 - First run seeds your city plus four others spread around the clock.
+- **A clock in the menu bar**, if you want one: Settings → Menu bar shows one of your cities' time beside the icon.
 - 50 languages, taken from Omarchy's catalog.
 
 ### Keys (while the panel is open)
@@ -47,7 +48,7 @@ Turn on **Open at login** in Settings.
 
 ## Build
 
-You need Xcode 15 or later (or the Swift 5.9+ command line tools) on macOS.
+You need Xcode 16 or later (Swift 6) on macOS. The app itself runs on macOS 13 and later.
 
 ```bash
 swift test
@@ -62,6 +63,19 @@ open build/Elsewhen.app
 ```
 
 `swift run Elsewhen` also works for a quick try. Open at login only works from the bundled app.
+
+### Tests
+
+`swift test` runs three suites:
+- `ElsewhenCoreTests`: the ported maths, checked against Omarchy's own tests (published sunrise times, eclipses, clipped land area, seeding, here and zones).
+- `PanelModelTests`: the panel's behaviour, driven the way the views and keys drive it.
+- `SnapshotTests`: the panel's fixed scene (one instant, zone, locale and weather; see `Snapshots.swift`) in light and dark, list and globe, compared with the images in `Tests/ElsewhenTests/__Snapshots__`.
+
+After a deliberate visual change, re-record the reference images on the macOS version CI uses (text rendering differs between releases):
+
+```bash
+RECORD_SNAPSHOTS=1 swift test --filter SnapshotTests
+```
 
 ### Layout
 
