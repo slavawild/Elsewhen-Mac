@@ -189,6 +189,8 @@ struct GlobeFooter: View {
       let i = globe.selected
       let daylight = Solar.isDaylight(city.lat, city.lon, Solar.subsolarPoint(globe.sunMs))
       let offset = ZoneInfo.of(city.zone, atMs: clock.nowMs)?.offsetMinutes
+      // Both offsets at the same instant, or a DST change between now and then reads as an hour apart.
+      let home = model.localTimeZone.secondsFromGMT(for: Date(timeIntervalSince1970: clock.nowMs / 1000)) / 60
       VStack(spacing: 1) {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
           HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -210,7 +212,7 @@ struct GlobeFooter: View {
             Text(city.zone).font(Style.font(Style.caption)).foregroundColor((hot ? theme.dim : theme.fainter).color)
             let label = model.offsetMode == .utc
               ? Model.utcOffsetLabel(offset, words: model.words)
-              : offset.map { Model.relativeOffsetLabel($0, model.localTimeZone.secondsFromGMT() / 60, words: model.words) } ?? ""
+              : offset.map { Model.relativeOffsetLabel($0, home, words: model.words) } ?? ""
             if !label.isEmpty {
               Text(label).font(Style.font(Style.caption)).foregroundColor((hot ? theme.foreground : theme.dim).color)
             }
